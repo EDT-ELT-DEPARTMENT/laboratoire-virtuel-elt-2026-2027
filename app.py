@@ -24,6 +24,149 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ---------------------------------------------------------------------
+# CORRESPONDANCE ÉTUDIANTS <-> EDT (matricule, promotion, groupe, sous-groupe)
+# ---------------------------------------------------------------------
+from pathlib import Path
+import re
+import unicodedata
+
+BASE_DIR_LAB = Path(__file__).resolve().parent
+FICHIER_ETUDIANTS_LAB = BASE_DIR_LAB / "Liste des étudiants_2026-2027.xlsx"
+FICHIER_EDT_LAB = BASE_DIR_LAB / "dataEDT-ELT-S1-2027.xlsx"
+
+
+def _lab_nettoyer_texte(valeur):
+    if valeur is None or (isinstance(valeur, float) and pd.isna(valeur)):
+        return ""
+    texte = str(valeur).strip()
+    if texte.lower() in {"nan", "none", "nat"}:
+        return ""
+    return re.sub(r"\s+", " ", texte)
+
+
+def _lab_normaliser(valeur):
+    texte = _lab_nettoyer_texte(valeur)
+    texte = unicodedata.normalize("NFKD", texte)
+    texte = "".join(c for c in texte if not unicodedata.combining(c))
+    return re.sub(r"\s+", "", texte).upper()
+
+
+def _lab_normaliser_matricule(valeur):
+    texte = _lab_nettoyer_texte(valeur)
+    if re.fullmatch(r"\d+\.0", texte):
+        texte = texte[:-2]
+    return re.sub(r"\s+", "", texte)
+
+
+@st.cache_data(show_spinner=False)
+def _lab_charger_etudiants(chemin_fichier):
+    df = pd.read_excel(chemin_fichier, sheet_name="Feuille1", dtype=str)
+    df.columns = [_lab_nettoyer_texte(c) for c in df.columns]
+    colonnes_requises = ["Mat. Etudiant", "Nom", "Prénom", "Promotion", "Groupe", "Sous groupe"]
+    manquantes = [c for c in colonnes_requises if c not in df.columns]
+    if manquantes:
+        raise ValueError("Colonnes absentes du fichier étudiants : " + ", ".join(manquantes))
+    for c in colonnes_requises:
+        df[c] = df[c].map(_lab_nettoyer_texte)
+    df["_mat_norm"] = df["Mat. Etudiant"].map(_lab_normaliser_matricule)
+    df["_promo_norm"] = df["Promotion"].map(_lab_normaliser)
+    df = df[df["_mat_norm"].ne("")].copy()
+    return df
+
+
+@st.cache_data(show_spinner=False)
+def _lab_charger_edt(chemin_fichier):
+    df = pd.read_excel(chemin_fichier, sheet_name=0, dtype=str)
+    df.columns = [_lab_nettoyer_texte(c) for c in df.columns]
+    requis = ["Enseignements", "Code", "Enseignants", "Horaire", "Jours", "Lieu", "Promotion"]
+    manquantes = [c for c in requis if c not in df.columns]
+    if manquantes:
+        raise ValueError("Colonnes absentes du fichier EDT : " + ", ".join(manquantes))
+    for c in requis:
+        df[c] = df[c].map(_lab_nettoyer_texte)
+    df["_promo_norm"] = df["Promotion"].map(_lab_normaliser)
+    df["_code_norm"] = df["Code"].map(_lab_normaliser)
+    df["_enseignement_norm"] = df["Enseignements"].map(_lab_normaliser)
+    # On retient les lignes dont le code est TP ou dont l'intitulé commence par TP.
+    masque_tp = df["_code_norm"].eq("TP") | df["_enseignement_norm"].str.startswith("TP-")
+    df = df[masque_tp & df["Enseignements"].ne("")].copy()
+    return df
+
+
+def _lab_retrouver_etudiant(matricule, df_etudiants):
+    mat = _lab_normaliser_matricule(matricule)
+    if not mat:
+        return None, "Saisissez votre matricule étudiant."
+    correspondances = df_etudiants[df_etudiants["_mat_norm"].eq(mat)]
+    if correspondances.empty:
+        return None, "Aucun étudiant ne correspond à ce matricule dans la liste officielle."
+    if len(correspondances) > 1:
+        return None, "Ce matricule apparaît plusieurs fois dans la liste. Contactez l'administration."
+    etu = correspondances.iloc[0]
+    if not etu.get("Promotion", "").strip():
+        return None, "La promotion de cet étudiant n'est pas renseignée dans le fichier officiel."
+    return etu, ""
+
+
+def _lab_groupe_depuis_sous_groupe(sous_groupe):
+    sg = _lab_normaliser(sous_groupe)
+    match = re.match(r"SG(\d+)", sg)
+    if not match:
+        return ""
+    chiffres = match.group(1)
+    return "G" + chiffres[:-1] if len(chiffres) >= 2 else ""
+
+
+def _lab_tp_correspond_au_groupe(intitule, groupe, sous_groupe):
+    """Accepte TP global, TP du sous-groupe exact et TP partagé SG11/SG12."""
+    texte = _lab_normaliser(intitule)
+    groupes_sg = re.findall(r"SG\d+", texte)
+    g = _lab_normaliser(groupe)
+    sg = _lab_normaliser(sous_groupe)
+    if not groupes_sg:
+        return True
+    if sg and sg not in {"P", "PROMOTION"}:
+        if sg in groupes_sg:
+            return True
+        # Un TP partagé (ex. SG11/SG12) est retenu seulement si le sous-groupe exact y figure.
+        return False
+    # Si le fichier étudiant ne fournit pas de sous-groupe, on filtre au moins par groupe.
+    numero = re.search(r"\d+", g)
+    if numero:
+        prefixe = "SG" + numero.group(0)
+        return any(x.startswith(prefixe) for x in groupes_sg)
+    return False
+
+
+def _lab_tp_etudiant(etu, df_edt):
+    promo = _lab_normaliser(etu.get("Promotion", ""))
+    groupe = _lab_nettoyer_texte(etu.get("Groupe", ""))
+    sous_groupe = _lab_nettoyer_texte(etu.get("Sous groupe", ""))
+    lignes = df_edt[df_edt["_promo_norm"].eq(promo)].copy()
+    if lignes.empty:
+        return lignes
+    lignes = lignes[
+        lignes["Enseignements"].map(
+            lambda x: _lab_tp_correspond_au_groupe(x, groupe, sous_groupe)
+        )
+    ].copy()
+    return lignes
+
+
+def _lab_modele_simulation_depuis_tp(intitule):
+    """Relie les intitulés EDT aux modèles effectivement présents dans TPS."""
+    t = _lab_normaliser(intitule)
+    if "ARDUINO" in t:
+        return "Commande d'un moteur par Arduino"
+    if "GRAETZ" in t or "REDRESSEMENT" in t:
+        return "Redressement monophasé - Pont de Graetz"
+    if re.search(r"\bRC\b", t) or "CIRCUITRC" in t:
+        return "Mesure des caractéristiques d'un circuit RC"
+    if "MOTEUR" in t and ("DEMARRAGE" in t or "DIRECT" in t):
+        return "Démarrage direct d'un moteur asynchrone"
+    return None
+
+# ---------------------------------------------------------------------
 # CONFIGURATION GÉNÉRALE
 # ---------------------------------------------------------------------
 st.set_page_config(
@@ -200,11 +343,47 @@ st.markdown(
 st.divider()
 
 with st.sidebar:
-    st.header("🎓 Espace étudiant")
-    nom = st.text_input("Nom", placeholder="Votre nom")
-    prenom = st.text_input("Prénom", placeholder="Votre prénom")
-    promotion = st.text_input("Promotion", placeholder="Ex. ING3")
-    groupe = st.text_input("Groupe / Section", placeholder="Ex. G1")
+    st.header("🎓 Identification étudiant")
+    matricule_etudiant = st.text_input(
+        "Matricule étudiant",
+        placeholder="Saisissez votre matricule étudiant",
+        key="lab_matricule_etudiant",
+        help="Votre identité, promotion, groupe et sous-groupe seront retrouvés automatiquement dans la liste officielle."
+    )
+    df_etudiants_lab = pd.DataFrame()
+    df_edt_lab = pd.DataFrame()
+    etudiant_connecte = None
+    erreur_identification = ""
+    try:
+        if not FICHIER_ETUDIANTS_LAB.exists():
+            erreur_identification = "Fichier introuvable : Liste des étudiants_2026-2027.xlsx"
+        else:
+            df_etudiants_lab = _lab_charger_etudiants(str(FICHIER_ETUDIANTS_LAB))
+            if matricule_etudiant.strip():
+                etudiant_connecte, erreur_identification = _lab_retrouver_etudiant(
+                    matricule_etudiant, df_etudiants_lab
+                )
+        if FICHIER_EDT_LAB.exists():
+            df_edt_lab = _lab_charger_edt(str(FICHIER_EDT_LAB))
+    except Exception as exc:
+        erreur_identification = f"Erreur de lecture des fichiers sources : {exc}"
+
+    if etudiant_connecte is not None:
+        nom = _lab_nettoyer_texte(etudiant_connecte.get("Nom", ""))
+        prenom = _lab_nettoyer_texte(etudiant_connecte.get("Prénom", ""))
+        promotion = _lab_nettoyer_texte(etudiant_connecte.get("Promotion", ""))
+        groupe = _lab_nettoyer_texte(etudiant_connecte.get("Groupe", ""))
+        sous_groupe = _lab_nettoyer_texte(etudiant_connecte.get("Sous groupe", ""))
+        st.success(f"Étudiant reconnu : {prenom} {nom}")
+        st.caption(f"Promotion : {promotion}")
+        st.caption(f"Groupe : {groupe or 'Non renseigné'}")
+        st.caption(f"Sous-groupe : {sous_groupe or 'Non renseigné'}")
+    else:
+        nom = prenom = promotion = groupe = sous_groupe = ""
+        if erreur_identification and matricule_etudiant.strip():
+            st.error(erreur_identification)
+        else:
+            st.info("Saisissez votre matricule pour afficher automatiquement votre groupe et vos TP.")
     st.divider()
     espace = st.radio(
         "Navigation",
@@ -220,7 +399,7 @@ with st.sidebar:
     )
     st.caption("Version pédagogique initiale — données de session non permanentes.")
 
-identite_complete = all([nom.strip(), prenom.strip(), promotion.strip(), groupe.strip()])
+identite_complete = bool(etudiant_connecte is not None and nom.strip() and prenom.strip() and promotion.strip())
 
 
 def liste_composants_selectionnes(noms):
@@ -1130,15 +1309,63 @@ elif espace == "🧩 Éditeur graphique de circuits":
 elif espace == "🧪 Réaliser un TP":
     st.title("🧪 Réalisation et validation d'un TP")
     if not identite_complete:
-        st.warning("Veuillez renseigner Nom, Prénom, Promotion et Groupe/Section dans la barre latérale.")
+        st.warning("Saisissez un matricule étudiant valide dans la barre latérale pour accéder uniquement aux TP de votre promotion, groupe et sous-groupe.")
+        st.stop()
+    if df_edt_lab.empty:
+        st.error("Le fichier dataEDT-ELT-S1-2027.xlsx est absent ou ne contient pas les colonnes attendues.")
+        st.stop()
 
-    tp_nom = st.selectbox("Choisir le travail pratique", list(TPS.keys()), key="tp_realiser_select")
+    st.success(
+        f"Étudiant : {prenom} {nom} · Promotion : {promotion} · "
+        f"Groupe : {groupe or '—'} · Sous-groupe : {sous_groupe or '—'}"
+    )
+    tp_etudiant_df = _lab_tp_etudiant(etudiant_connecte, df_edt_lab)
+    if tp_etudiant_df.empty:
+        st.warning("Aucun TP n'a été trouvé dans l'EDT pour votre promotion et votre groupe/sous-groupe. Vérifiez votre inscription auprès de l'administration.")
+        st.stop()
+
+    options_tp_edt = sorted(tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(), key=lambda x: _lab_normaliser(x))
+    st.caption(f"{len(options_tp_edt)} intitulé(s) de TP disponible(s) pour votre inscription.")
+    tp_edt_choisi = st.selectbox(
+        "Choisir le travail pratique",
+        options_tp_edt,
+        key=f"tp_edt_etudiant_{_lab_normaliser_matricule(matricule_etudiant)}",
+    )
+    lignes_tp_choisi = tp_etudiant_df[
+        tp_etudiant_df["Enseignements"].astype(str).str.strip().eq(tp_edt_choisi)
+    ].copy()
+    enseignants_tp = sorted({
+        _lab_nettoyer_texte(x) for x in lignes_tp_choisi["Enseignants"].tolist()
+        if _lab_nettoyer_texte(x)
+    })
+    st.subheader("👨‍🏫 Chargé(s) de matière")
+    if enseignants_tp:
+        for enseignant in enseignants_tp:
+            st.markdown(f"- **{enseignant}**")
+    else:
+        st.warning("Aucun enseignant n'est renseigné pour ce TP dans l'EDT.")
+    infos_tp = lignes_tp_choisi[["Jours", "Horaire", "Lieu"]].drop_duplicates()
+    if not infos_tp.empty:
+        st.caption("Séances programmées pour ce TP :")
+        st.dataframe(infos_tp, use_container_width=True, hide_index=True)
+
+    tp_nom = _lab_modele_simulation_depuis_tp(tp_edt_choisi)
+    if tp_nom is None or tp_nom not in TPS:
+        st.info(
+            "Ce TP est bien associé à votre promotion et à votre groupe dans l'EDT. "
+            "Son intitulé et son enseignant sont affichés ci-dessus. "
+            "Son schéma interactif doit encore être défini dans la bibliothèque pédagogique "
+            "avant de lancer une simulation pour ce TP."
+        )
+        st.stop()
+
     tp = TPS[tp_nom]
-    if st.session_state.get("tp_realiser_courant") != tp_nom:
-        st.session_state.tp_realiser_courant = tp_nom
+    if st.session_state.get("tp_realiser_courant") != tp_edt_choisi:
+        st.session_state.tp_realiser_courant = tp_edt_choisi
         st.session_state.liaisons_etudiant = list(tp["liaisons"])
         st.session_state.dernier_resultat = None
         st.session_state.composants_tp_personnalises = list(tp["composants"])
+        st.session_state.pop("courbe_sonde_tp", None)
     st.info(tp["description"])
 
     st.subheader("Schéma du TP chargé automatiquement")
@@ -1252,7 +1479,7 @@ elif espace == "🧪 Réaliser un TP":
     st.caption("La correction compare votre sélection et vos connexions au schéma de référence du TP.")
     if st.button("✅ Vérifier et corriger mon montage", type="primary", use_container_width=True, key="verifier_montage_tp"):
         if not identite_complete:
-            st.error("Identité incomplète : renseignez vos informations dans la barre latérale.")
+            st.error("Identité non reconnue : vérifiez votre matricule étudiant dans la barre latérale.")
         else:
             resultat = corriger_montage(tp_nom, composants_choisis, st.session_state.liaisons_etudiant)
             st.session_state.dernier_resultat = resultat
@@ -1260,7 +1487,7 @@ elif espace == "🧪 Réaliser un TP":
                 "Date": datetime.now().strftime("%d/%m/%Y %H:%M"),
                 "Nom": nom.strip(), "Prénom": prenom.strip(),
                 "Promotion": promotion.strip(), "Groupe": groupe.strip(),
-                "TP": tp_nom, "Note": resultat["note"],
+                "TP": tp_edt_choisi, "Chargé(s) de matière": ", ".join(enseignants_tp), "Note": resultat["note"],
                 "Résultat": "Réussi" if resultat["correct"] else "À corriger",
             })
     resultat = st.session_state.dernier_resultat
