@@ -47,17 +47,23 @@ SPICE ni une simulation dynamique complète de machine asynchrone.
 
 ## Solveur électrique DC (nouvelle étape)
 
-Le canevas accepte maintenant plusieurs instances d'un même composant. La bibliothèque
-inclut une source de tension DC et une source de courant DC. Dans le solveur, les fils
-créés sur le canevas fusionnent les bornes en nœuds électriques ; l'étudiant choisit
-un nœud de référence (0 V), renseigne les valeurs des composants, puis lance la résolution.
+Le canevas accepte maintenant plusieurs instances d'un même composant. Les blocs affichent
+les noms de leurs bornes sous forme de repères visibles. Chaque fil du canevas est affecté
+à une borne de départ et une borne d'arrivée dans le panneau de configuration des fils.
+La bibliothèque inclut une source de tension DC et une source de courant DC. Les fils
+fusionnent les bornes en nœuds électriques ; l'étudiant choisit un nœud de référence (0 V),
+renseigne les valeurs des composants, puis lance la résolution.
 
 Le solveur utilise la méthode des nœuds modifiée (MNA) et fournit les tensions de nœuds,
 les courants orientés et les puissances absorbées/fournies pour les résistances et sources
-DC idéales. Les sources de tension sont orientées de « + » vers « - » ; le courant des
-sources de courant est défini dans le même sens.
+DC idéales. Les appareils de mesure virtuels affichent la différence de potentiel entre
+deux bornes choisies ou le courant calculé dans un composant. Les sources de tension sont
+orientées de « + » vers « - » ; le courant des sources de courant est défini dans le même sens.
 
-**Limites actuelles :** circuits linéaires en régime continu uniquement. Les diodes,
+**Limites actuelles :** circuits linéaires en régime continu uniquement. Les bornes sont
+visibles sur les blocs, mais cette version de Streamlit Flow ne permet pas encore de tirer
+un fil directement depuis une broche individuelle : l'étudiant relie les blocs dans le canevas,
+puis choisit les deux broches exactes dans les listes déroulantes. Les diodes,
 transistors, condensateurs, bobines, transformateurs, contacteurs et moteurs ne sont pas
 encore intégrés à ce solveur. Les modèles analytiques spécifiques aux TP restent séparés
 et ne doivent pas être confondus avec la résolution du circuit dessiné. Pour les circuits
