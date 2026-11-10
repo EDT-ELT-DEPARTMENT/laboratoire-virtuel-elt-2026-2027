@@ -9,6 +9,7 @@ import io
 import math
 from datetime import datetime
 from uuid import uuid4
+from html import escape as html_escape
 
 try:
     from streamlit_flow import streamlit_flow
@@ -212,7 +213,7 @@ COMPOSANTS = {
     "Puissance & actionneurs": {
         "Moteur asynchrone triphasé": ["U1", "V1", "W1", "U2", "V2", "W2", "PE"],
         "Transformateur monophasé": ["P1", "P2", "S1", "S2"],
-        "Contacteur KM1": ["L1", "L2", "L3", "T1", "T2", "T3", "A1", "A2"],
+        "Contacteur KM1": ["L1", "L2", "L3", "T1", "T2", "T3", "A1", "A2", "13", "14"],
         "Relais thermique": ["L1", "L2", "L3", "T1", "T2", "T3", "95", "96"],
         "Pont de diodes (Graetz)": ["AC1", "AC2", "DC+", "DC-"],
         "Diode de puissance": ["Anode", "Cathode"],
@@ -251,6 +252,88 @@ COMPOSANTS = {
         "API Siemens (E/S)": ["L+", "M", "I0.0", "I0.1", "Q0.0", "Q0.1"],
     },
 }
+
+
+# ---------------------------------------------------------------------
+# FICHES TECHNIQUES ET PHOTOGRAPHIES LOCALES
+# Les valeurs nominales dépendent de la référence exacte du fabricant :
+# elles ne sont volontairement pas inventées lorsqu'elles ne sont pas connues.
+# ---------------------------------------------------------------------
+DOSSIER_PHOTOS_COMPOSANTS = BASE_DIR_LAB / "assets" / "composants"
+
+DESCRIPTIONS_COMPOSANTS = {
+    "Moteur asynchrone triphasé": ("Convertit l'énergie électrique triphasée en énergie mécanique par induction électromagnétique.", "Moteur triphasé", "Plaque signalétique : tension, couplage Δ/Y, puissance, courant, fréquence, cos φ, rendement et vitesse.", "U1, V1, W1 : début des enroulements ; U2, V2, W2 : fins ; PE : terre de protection.", "Entraînement de pompes, ventilateurs, convoyeurs et machines industrielles."),
+    "Transformateur monophasé": ("Transfère l'énergie alternative entre deux circuits par induction électromagnétique.", "Transformateur", "Plaque : puissances apparente (VA), tensions primaire/secondaire, fréquence et courant nominal.", "P1-P2 : primaire ; S1-S2 : secondaire.", "Adaptation de tension, isolation galvanique et alimentation de montages."),
+    "Contacteur KM1": ("Appareil électromécanique commandé par une bobine permettant d'établir ou couper un circuit de puissance.", "Contacteur", "Tension bobine A1-A2, tension assignée, courant d'emploi, catégorie d'emploi (ex. AC-3) et nombre de pôles selon référence.", "L1/L2/L3 : arrivée ; T1/T2/T3 : départ ; A1/A2 : bobine ; 13-14 : auxiliaire NO.", "Commande fréquente de moteurs et de charges électriques."),
+    "Relais thermique": ("Protège un moteur contre les surcharges prolongées en détectant l'échauffement lié au courant.", "Relais thermique", "Plage de réglage en ampères, classe de déclenchement, tension/courant des contacts auxiliaires selon référence.", "L1/L2/L3 : entrée ; T1/T2/T3 : sortie ; 95-96 : contact NF de défaut.", "Protection contre les surcharges moteur, généralement associé à un contacteur."),
+    "Pont de diodes (Graetz)": ("Redresse une tension alternative monophasée en tension continue ondulée.", "Pont redresseur", "Tension inverse répétitive, courant moyen admissible, courant de surcharge et chute directe selon référence.", "AC1-AC2 : entrée alternative ; DC+ et DC- : sortie continue.", "Alimentations continues et redresseurs monophasés."),
+    "Diode de puissance": ("Laisse principalement passer le courant dans le sens anode vers cathode et bloque en sens inverse.", "Diode", "Courant direct, tension inverse répétitive, chute directe et courant de surtension selon référence.", "Anode (A) et cathode (K, côté bague sur diode axiale).", "Redressement, roue libre et protection contre les inversions de polarité."),
+    "Résistance": ("Limite le courant et crée une chute de tension selon la loi d'Ohm.", "Résistance", "Valeur en ohms, tolérance, puissance dissipable et tension maximale selon référence.", "Deux bornes non polarisées A et B.", "Limitation de courant, diviseur de tension et polarisation."),
+    "Résistance de puissance": ("Dissipe de l'énergie électrique sous forme de chaleur tout en limitant le courant.", "Résistance", "Valeur (Ω), puissance nominale (W), tolérance et conditions de refroidissement selon référence.", "Deux bornes non polarisées.", "Charges, freinage, limitation de courant et dissipation."),
+    "Condensateur": ("Stocke temporairement l'énergie dans un champ électrique et s'oppose aux variations rapides de tension.", "Condensateur", "Capacité (F), tension nominale, tolérance, technologie et polarité éventuelle.", "Deux bornes ; respecter + et - pour un condensateur polarisé.", "Filtrage, temporisation, couplage et circuits RC."),
+    "Bobine": ("Stocke l'énergie dans un champ magnétique et s'oppose aux variations de courant.", "Bobine", "Inductance (H), courant admissible, résistance série et fréquence d'utilisation.", "Deux bornes A et B ; polarité généralement non imposée pour une bobine simple.", "Filtrage, relais, électroaimants et circuits RL."),
+    "Transistor NPN": ("Composant semi-conducteur permettant l'amplification ou la commutation d'un courant.", "Transistor NPN", "Référence, tension collecteur-émetteur, courant collecteur, puissance et gain selon datasheet.", "Base (B), collecteur (C), émetteur (E).", "Commande de relais, commutation et amplification."),
+    "Amplificateur opérationnel": ("Amplifie la différence de tension entre ses entrées selon son alimentation et sa contre-réaction.", "Amplificateur opérationnel", "Alimentation, tension d'offset, bande passante, slew-rate et plage de mode commun selon référence.", "V+ et V- : alimentation ; Entrée+ et Entrée- ; Sortie.", "Amplification, comparateur (selon montage), filtrage et conditionnement analogique."),
+    "LED": ("Émet de la lumière lorsqu'elle est parcourue par un courant direct.", "LED", "Couleur/longueur d'onde, courant direct, tension directe et puissance selon référence.", "Anode (+) et cathode (-, patte courte/ méplat selon boîtier).", "Signalisation et indication d'état ; utiliser une limitation de courant."),
+    "Potentiomètre": ("Résistance variable à trois bornes avec un curseur mobile.", "Potentiomètre", "Résistance totale, loi (linéaire/logarithmique), puissance et angle de rotation.", "A et B : extrémités ; Curseur : borne mobile.", "Réglage de niveau, consigne et diviseur de tension."),
+    "Arduino Uno": ("Carte à microcontrôleur programmable pour acquisition et commande de signaux.", "Carte Arduino", "Carte exacte, microcontrôleur, tension logique, limites de courant E/S et alimentation selon version.", "5V, GND, broches numériques et entrées analogiques ; respecter les limites électriques.", "Prototypage, commande basse tension et acquisition pédagogique."),
+    "ESP32": ("Microcontrôleur avec connectivité sans fil intégrée pour systèmes embarqués.", "Carte ESP32", "Modèle de module, alimentation 3,3 V, limites GPIO, Wi-Fi/Bluetooth selon datasheet.", "3V3, GND et GPIO ; les entrées ne sont généralement pas tolérantes au 5 V.", "Objets connectés, commande et mesure."),
+    "API Siemens (E/S)": ("Automate programmable industriel assurant le traitement logique des entrées et sorties.", "Automate programmable", "Référence CPU/module, tension d'alimentation, type d'E/S, courant par voie et protocole selon modèle.", "L+/M : alimentation ; I : entrées ; Q : sorties.", "Automatisation de procédés et commande de machines."),
+}
+# Fallback fiches by type/category
+def _fiche_generique(nom, categorie):
+    if "mesure" in categorie.lower() or nom in ("Voltmètre", "Ampèremètre", "Multimètre", "Oscilloscope", "Wattmètre", "Tachymètre"):
+        return ("Instrument destiné à mesurer ou observer une grandeur électrique ou mécanique.", "Instrument de mesure", "Plage, précision, catégorie de sécurité et bande passante selon modèle.", "Bornes d'entrée et référence indiquées sur l'appareil ; respecter les catégories de mesure.", "Contrôle, diagnostic et caractérisation expérimentale.")
+    if "capteur" in categorie.lower():
+        return ("Détecte une grandeur physique et la convertit en signal exploitable.", "Capteur", "Alimentation, portée/plage, type de sortie, précision et temps de réponse selon référence.", "Alimentation, 0 V et sortie ; vérifier le brochage constructeur.", "Acquisition de présence, position, vitesse ou température.")
+    if "commande" in categorie.lower():
+        return ("Organe de commande, de signalisation ou de protection d'un circuit.", "Commande électrique", "Tension assignée, courant admissible, catégorie d'emploi et degré de protection selon référence.", "Repères normalisés indiqués dans la fiche ; vérifier le schéma constructeur.", "Commande, signalisation et sécurité des installations.")
+    return ("Composant utilisé dans les circuits électriques ou électroniques.", "Composant électrique", "Caractéristiques nominales à relever sur le marquage et la documentation constructeur.", "Bornes selon le repérage indiqué sur le composant.", "Montage, commande, mesure ou conversion d'énergie selon sa fonction.")
+
+SYMBOLES_ELECTRIQUES = {
+    "Résistance": "─[ R ]─", "Résistance de puissance": "─[ R ]─",
+    "Condensateur": "─| |─", "Bobine": "─((((─", "Diode de puissance": "─|>|─",
+    "LED": "─|>|─  ↗↗", "Transistor NPN": "B ─|> C / E",
+    "Source de tension DC": "─( + − )─", "Source de courant DC": "─( ↑ )─",
+    "Lampe": "─( X )─", "Fusible": "─[ F ]─", "Bouton poussoir NO": "─| |─",
+    "Bouton poussoir NF": "─|/|─", "Arrêt d'urgence NF": "─|/|─",
+    "Contacteur KM1": "Bobine A1 ─( KM1 )─ A2", "Relais auxiliaire": "Bobine + contacts NO/NF",
+    "Relais thermique": "─[ Θ ]─", "Moteur asynchrone triphasé": "─( M 3~ )─",
+    "Transformateur monophasé": ")))‖(((", "Pont de diodes (Graetz)": "◇  ~  +  −",
+    "Voltmètre": "─( V )─", "Ampèremètre": "─( A )─", "Wattmètre": "─( W )─",
+    "Voyant lumineux": "─( ⊗ )─", "Disjoncteur tripolaire": "─o/ o─ ×3",
+    "Potentiomètre": "─[↗]─", "Arduino Uno": "┌ Arduino ┐", "ESP32": "┌ ESP32 ┐",
+    "API Siemens (E/S)": "┌ API ┐",
+}
+
+def _slug_composant(nom):
+    texte = unicodedata.normalize("NFKD", str(nom))
+    texte = "".join(c for c in texte if not unicodedata.combining(c)).lower()
+    return re.sub(r"[^a-z0-9]+", "-", texte).strip("-")
+
+def fiche_composant(nom, categorie, bornes):
+    fiche = DESCRIPTIONS_COMPOSANTS.get(nom)
+    if fiche is None:
+        fiche = _fiche_generique(nom, categorie)
+    fonction, symbole, caracteristiques, bornes_desc, utilisation = fiche
+    if nom not in DESCRIPTIONS_COMPOSANTS:
+        bornes_desc = " ; ".join(bornes) + ". Vérifier le brochage exact sur la documentation constructeur."
+    return {
+        "fonction": fonction, "symbole": SYMBOLES_ELECTRIQUES.get(nom, f"─[ {symbole} ]─"),
+        "caracteristiques": caracteristiques, "bornes": bornes_desc, "utilisation": utilisation,
+        "photo": DOSSIER_PHOTOS_COMPOSANTS / f"{_slug_composant(nom)}.jpg",
+    }
+
+def afficher_photo_composant(nom, fiche, width=None):
+    chemin = fiche["photo"]
+    if chemin.is_file():
+        st.image(str(chemin), caption=f"Photographie réelle — {nom}", use_container_width=True)
+    else:
+        st.info(
+            f"Photo locale non installée pour **{nom}**. "
+            f"Ajoutez une photographie réelle sous le nom `{chemin.name}` dans "
+            "`assets/composants/`."
+        )
 
 # ---------------------------------------------------------------------
 # TRAVAUX PRATIQUES ET CORRIGÉS DE RÉFÉRENCE
@@ -326,6 +409,7 @@ for key, default in {
     "dernier_resultat": None,
     "circuit_graphique": None,
     "bornes_par_arete": {},
+    "couleurs_fils_par_arete": {},
     "tp_graphique_courant": None,
 }.items():
     if key not in st.session_state:
@@ -487,6 +571,7 @@ def ajouter_composant_graphique(nom_composant):
     contenu = (
         f"<div style='padding:9px;min-width:190px;max-width:260px'>"
         f"<div style='font-weight:700;font-size:14px;color:#0f172a'>⚡ {instance}</div>"
+        f"<div style='font-size:12px;color:#1d4ed8;margin-top:5px'>Symbole : {html_escape(SYMBOLES_ELECTRIQUES.get(nom_composant, nom_composant))}</div>"
         f"<div style='font-size:10px;color:#475569;margin-top:6px'>BORNES ÉLECTRIQUES</div>"
         f"<div style='margin-top:2px;line-height:1.9'>{pastilles}</div></div>"
     )
@@ -498,6 +583,105 @@ def ajouter_composant_graphique(nom_composant):
     state.nodes.append(node)
     st.session_state.circuit_graphique = state
 
+
+
+# ---------------------------------------------------------------------
+# CÂBLAGE INDUSTRIEL : CONVENTIONS DE COULEURS ET SCHÉMA COLORÉ
+# Les couleurs sont pédagogiques et doivent être adaptées au règlement
+# de câblage et à la norme adoptés dans l'établissement.
+# ---------------------------------------------------------------------
+COULEURS_FILS = {
+    "Phase L1/L2/L3 — noir": {"hex": "#202124", "type": "phase"},
+    "Phase — marron": {"hex": "#8B4513", "type": "phase"},
+    "Neutre N — bleu clair": {"hex": "#168BCE", "type": "neutre"},
+    "Commande CA — rouge": {"hex": "#E53935", "type": "commande"},
+    "+24 V CC — rouge": {"hex": "#E53935", "type": "positif"},
+    "0 V CC / négatif — bleu": {"hex": "#1976D2", "type": "negatif"},
+    "Conducteur de protection PE — vert/jaune": {"hex": "#159447", "type": "terre"},
+    "Commande / signal — orange": {"hex": "#F28C28", "type": "signal"},
+    "Autre conducteur — jaune": {"hex": "#E0B400", "type": "autre"},
+}
+
+
+def _couleur_initiale_fil(borne_a, borne_b):
+    texte = f"{borne_a} {borne_b}".upper()
+    if "PE" in texte or "TERRE" in texte:
+        return "Conducteur de protection PE — vert/jaune"
+    if any(x in texte for x in ("A1", "A2", "13", "14", "95", "96", "11", "12")):
+        return "Commande CA — rouge"
+    if "+24V" in texte or "5V" in texte or "3V3" in texte or "DC+" in texte:
+        return "+24 V CC — rouge"
+    if "0V" in texte or "GND" in texte or "DC-" in texte:
+        return "0 V CC / négatif — bleu"
+    if any(x in texte for x in ("L1", "L2", "L3", "T1", "T2", "T3")):
+        return "Phase L1/L2/L3 — noir"
+    if ".N" in texte or " N " in f" {texte} ":
+        return "Neutre N — bleu clair"
+    return "Autre conducteur — jaune"
+
+
+def afficher_schema_cablage_colorie(state, bornes_par_arete, couleurs_par_arete):
+    """Affiche une vue pédagogique des fils avec leur couleur sélectionnée."""
+    fig = go.Figure()
+    nodes = {n.id: n for n in state.nodes}
+    if not nodes:
+        st.info("Ajoutez des composants pour afficher le schéma de câblage coloré.")
+        return
+    positions = {}
+    for node in state.nodes:
+        pos = getattr(node, "pos", getattr(node, "position", (0, 0)))
+        try:
+            if isinstance(pos, dict):
+                x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
+            else:
+                x, y = float(pos[0]), float(pos[1])
+        except Exception:
+            x, y = 0.0, 0.0
+        positions[node.id] = (x, y)
+
+    # Tracer les conducteurs entre les centres des composants.
+    for edge in state.edges:
+        a, b = positions.get(edge.source), positions.get(edge.target)
+        if not a or not b:
+            continue
+        choix = bornes_par_arete.get(edge.id, ("?", "?"))
+        label = couleurs_par_arete.get(edge.id) or _couleur_initiale_fil(*choix)
+        config = COULEURS_FILS.get(label, COULEURS_FILS["Autre conducteur — jaune"])
+        x1, y1 = a
+        x2, y2 = b
+        # Une légère courbure visuelle évite de confondre plusieurs fils superposés.
+        decalage = (len(str(edge.id)) % 5 - 2) * 9
+        xm, ym = (x1 + x2) / 2, (y1 + y2) / 2 + decalage
+        if config["type"] == "terre":
+            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
+                line=dict(color="#159447", width=8), hoverinfo="skip", showlegend=False))
+            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
+                line=dict(color="#F4D03F", width=3, dash="dash"),
+                name="PE vert/jaune", hovertemplate="PE vert/jaune<extra></extra>"))
+        else:
+            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
+                line=dict(color=config["hex"], width=6), name=label,
+                hovertemplate=f"{html_escape(str(choix[0]))} ↔ {html_escape(str(choix[1]))}<br>{html_escape(label)}<extra></extra>"))
+        fig.add_trace(go.Scatter(x=[x1, x2], y=[y1, y2], mode="markers",
+            marker=dict(size=8, color=config["hex"], line=dict(color="white", width=1)),
+            showlegend=False, hoverinfo="skip"))
+
+    # Les blocs sont repérés par leur désignation et leurs bornes.
+    fig.add_trace(go.Scatter(
+        x=[positions[n.id][0] for n in state.nodes],
+        y=[positions[n.id][1] for n in state.nodes],
+        mode="markers+text",
+        text=[n.data.get("instance", n.data.get("component", n.id)) for n in state.nodes],
+        textposition="top center",
+        marker=dict(symbol="square", size=25, color="#E8F1FA", line=dict(color="#1D4ED8", width=2)),
+        name="Appareils", hovertext=["Bornes : " + ", ".join(n.data.get("terminals", [])) for n in state.nodes],
+        hovertemplate="%{text}<br>%{hovertext}<extra></extra>"))
+    fig.update_layout(title="Schéma de câblage — conducteurs colorés", height=480,
+        xaxis=dict(visible=False), yaxis=dict(visible=False, autorange="reversed"),
+        showlegend=True, legend=dict(orientation="h", y=-0.15),
+        margin=dict(l=20, r=20, t=55, b=65), plot_bgcolor="#FAFCFF",
+        paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True, key="schema_cablage_colorie")
 
 def analyser_circuit_graphique(tp_nom, state, bornes_par_arete):
     reference = TPS[tp_nom]
@@ -824,21 +1008,64 @@ if espace == "🏠 Accueil":
     )
 
 elif espace == "🧰 Bibliothèque de composants":
-    st.title("🧰 Bibliothèque normalisée de composants")
-    st.write("Sélectionnez une catégorie pour consulter les composants et leurs bornes.")
-    for categorie, elements in COMPOSANTS.items():
-        with st.expander(f"📂 {categorie} — {len(elements)} composants"):
-            lignes = []
-            for composant, bornes in elements.items():
-                lignes.append({"Composant": composant, "Bornes disponibles": " • ".join(bornes)})
-            st.dataframe(pd.DataFrame(lignes), use_container_width=True, hide_index=True)
+    st.title("🧰 Bibliothèque de composants électriques")
+    st.write("Recherchez un composant, consultez sa photographie réelle, son symbole électrique et sa fiche technique.")
+    total_composants = sum(len(v) for v in COMPOSANTS.values())
+    nb_photos = sum(1 for elements in COMPOSANTS.values() for nom in elements
+                    if fiche_composant(nom, next(c for c, e in COMPOSANTS.items() if nom in e), elements[nom])["photo"].is_file())
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Composants référencés", total_composants)
+    m2.metric("Catégories", len(COMPOSANTS))
+    m3.metric("Photographies locales installées", f"{nb_photos}/{total_composants}")
+    recherche_bib = st.text_input("🔎 Rechercher par nom", placeholder="Ex. moteur, contacteur, diode, Arduino…", key="recherche_bibliotheque")
+    categories_bib = ["Toutes les catégories"] + list(COMPOSANTS.keys())
+    categorie_bib = st.selectbox("Catégorie", categories_bib, key="categorie_bibliotheque")
+    liste_bib = []
+    for cat, elements in COMPOSANTS.items():
+        if categorie_bib != "Toutes les catégories" and cat != categorie_bib:
+            continue
+        for nom, bornes in elements.items():
+            if recherche_bib.strip() and recherche_bib.casefold() not in nom.casefold() and recherche_bib.casefold() not in cat.casefold():
+                continue
+            liste_bib.append((cat, nom, bornes))
+    st.caption(f"{len(liste_bib)} composant(s) correspondant(s).")
+    if not liste_bib:
+        st.warning("Aucun composant ne correspond à cette recherche.")
+    for cat, nom, bornes in liste_bib:
+        fiche = fiche_composant(nom, cat, bornes)
+        with st.expander(f"⚡ {nom}  ·  {cat}", expanded=(len(liste_bib) == 1)):
+            gauche, droite = st.columns([1.05, 1.4], gap="large")
+            with gauche:
+                afficher_photo_composant(nom, fiche)
+                st.markdown("**Symbole électrique utilisé dans le schéma**")
+                st.code(fiche["symbole"], language=None)
+                st.caption("La photographie représente le matériel réel ; le symbole est une représentation conventionnelle pour le schéma.")
+            with droite:
+                st.markdown("**Désignation**")
+                st.write(nom)
+                st.markdown("**Fonction**")
+                st.write(fiche["fonction"])
+                st.markdown("**Bornes / raccordements**")
+                st.write(fiche["bornes"])
+                st.markdown("**Caractéristiques nominales**")
+                st.write(fiche["caracteristiques"])
+                st.markdown("**Utilisation**")
+                st.write(fiche["utilisation"])
+                st.caption("Les valeurs chiffrées doivent être relevées sur la plaque signalétique ou la fiche constructeur du modèle réellement utilisé.")
+                if st.button("➕ Ajouter ce composant à l’éditeur", key=f"bib_add_{_slug_composant(nom)}", use_container_width=True):
+                    if not STREAMLIT_FLOW_DISPONIBLE:
+                        st.error("L'éditeur nécessite streamlit-flow-component==1.6.1.")
+                    else:
+                        initialiser_circuit_graphique()
+                        ajouter_composant_graphique(nom)
+                        st.success(f"{nom} ajouté au canevas. Ouvrez « Éditeur graphique de circuits » pour le câblage.")
 
 elif espace == "🧩 Éditeur graphique de circuits":
     st.title("🧩 Atelier graphique de câblage électrique")
     st.write(
-        "Ajoutez les appareils dans le canevas, déplacez-les, puis tirez un fil "
-        "d'une poignée de sortie vers une poignée d'entrée. Affectez ensuite les bornes "
-        "exactes et lancez la correction."
+        "Reconnaissez les appareils, placez-les dans le canevas, reliez les bornes "
+        "par glisser-déposer, choisissez la couleur de chaque conducteur et vérifiez "
+        "votre câblage de puissance et de commande."
     )
     if not STREAMLIT_FLOW_DISPONIBLE:
         st.error("Module absent : ajoutez streamlit-flow-component==1.6.1 à requirements.txt.")
@@ -850,6 +1077,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
         st.session_state.tp_graphique_courant = tp_graphique
         st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
         st.session_state.bornes_par_arete = {}
+        st.session_state.couleurs_fils_par_arete = {}
         st.session_state.pop("dernier_resultat_graphique", None)
 
     st.info(TPS[tp_graphique]["description"])
@@ -857,7 +1085,15 @@ elif espace == "🧩 Éditeur graphique de circuits":
     with col_bib:
         st.subheader("🧰 Bibliothèque")
         categorie_graph = st.selectbox("Catégorie", list(COMPOSANTS.keys()), key="cat_graphique")
-        composant_graph = st.selectbox("Composant", list(COMPOSANTS[categorie_graph].keys()), key="composant_graphique")
+        recherche_graph = st.text_input("Rechercher un composant", key="recherche_composant_graph")
+        choix_graph = [n for n in COMPOSANTS[categorie_graph] if recherche_graph.casefold() in n.casefold()]
+        if not choix_graph:
+            st.warning("Aucun composant trouvé dans cette catégorie.")
+            choix_graph = list(COMPOSANTS[categorie_graph])
+        composant_graph = st.selectbox("Composant", choix_graph, key="composant_graphique")
+        fiche_graph = fiche_composant(composant_graph, categorie_graph, COMPOSANTS[categorie_graph][composant_graph])
+        afficher_photo_composant(composant_graph, fiche_graph)
+        st.caption(f"Symbole : {fiche_graph['symbole']}")
         if st.button("➕ Placer dans le circuit", use_container_width=True):
             ajouter_composant_graphique(composant_graph)
             st.rerun()
@@ -868,12 +1104,13 @@ elif espace == "🧩 Éditeur graphique de circuits":
         if st.button("🗑️ Réinitialiser le canevas", use_container_width=True):
             st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
             st.session_state.bornes_par_arete = {}
+            st.session_state.couleurs_fils_par_arete = {}
             st.session_state.pop("dernier_resultat_graphique", None)
             st.rerun()
 
     with col_canvas:
         st.subheader("⚙️ Zone de câblage")
-        st.caption("Glissez les blocs pour les déplacer. Reliez les poignées droite et gauche pour créer un fil.")
+        st.caption("Glissez les appareils pour les déplacer. Reliez une poignée de sortie à une poignée d'entrée ; attribuez ensuite les bornes et la couleur de chaque fil.")
         st.session_state.circuit_graphique = streamlit_flow(
             "atelier_electrique_graphique",
             st.session_state.circuit_graphique,
@@ -918,7 +1155,36 @@ elif espace == "🧩 Éditeur graphique de circuits":
                     key=f"dst_terminal_{edge.id}",
                 )
             st.session_state.bornes_par_arete[edge.id] = (choix1, choix2)
+            couleur_defaut = st.session_state.couleurs_fils_par_arete.get(
+                edge.id, _couleur_initiale_fil(choix1, choix2)
+            )
+            options_couleur = list(COULEURS_FILS.keys())
+            index_couleur = options_couleur.index(couleur_defaut) if couleur_defaut in options_couleur else 0
+            couleur_choisie = st.selectbox(
+                "Couleur / fonction du conducteur", options_couleur,
+                index=index_couleur, key=f"wire_color_{edge.id}"
+            )
+            st.session_state.couleurs_fils_par_arete[edge.id] = couleur_choisie
+            couleur_hex = COULEURS_FILS[couleur_choisie]["hex"]
+            st.markdown(
+                f"<span style='display:inline-block;width:42px;height:8px;background:{couleur_hex};"
+                f"border-radius:5px;vertical-align:middle'></span> **{html_escape(couleur_choisie)}**",
+                unsafe_allow_html=True,
+            )
             st.divider()
+
+    if state_graph.edges:
+        st.subheader("🎨 Visualisation des conducteurs réels")
+        st.caption("Les couleurs sont visibles sur ce schéma de câblage. Le conducteur PE est représenté en vert/jaune bicolore.")
+        afficher_schema_cablage_colorie(
+            state_graph, st.session_state.bornes_par_arete,
+            st.session_state.couleurs_fils_par_arete
+        )
+    st.markdown(
+        "**Repères de câblage :** phases en noir/marron, neutre en bleu, commande en rouge, "
+        "conducteur de protection PE en vert/jaune. Les couleurs doivent toujours être "
+        "confirmées avec la norme et les consignes de sécurité applicables au montage réel."
+    )
 
     st.divider()
     st.header("🔬 Simulation du circuit réellement câblé — solveur DC")
@@ -1109,8 +1375,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
         vs = vm * np.sin(2 * np.pi * frequence * t)
         vo = np.maximum(np.abs(vs) - 2 * chute_diode, 0)
         io = vo / resistance_charge
-        u_moy = float(np.trapezoid(vo, t) / (t[-1] - t[0]))
-        u_eff = float(math.sqrt(np.trapezoid(vo**2, t) / (t[-1] - t[0])))
+        u_moy = float(np.trapz(vo, t) / (t[-1] - t[0]))
+        u_eff = float(math.sqrt(np.trapz(vo**2, t) / (t[-1] - t[0])))
         i_moy = u_moy / resistance_charge
         p_charge = u_eff**2 / resistance_charge
         ondulation = 2 * frequence
