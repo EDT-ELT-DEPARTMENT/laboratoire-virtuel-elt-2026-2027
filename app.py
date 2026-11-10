@@ -1109,8 +1109,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
         vs = vm * np.sin(2 * np.pi * frequence * t)
         vo = np.maximum(np.abs(vs) - 2 * chute_diode, 0)
         io = vo / resistance_charge
-        u_moy = float(np.trapz(vo, t) / (t[-1] - t[0]))
-        u_eff = float(math.sqrt(np.trapz(vo**2, t) / (t[-1] - t[0])))
+        u_moy = float(np.trapezoid(vo, t) / (t[-1] - t[0]))
+        u_eff = float(math.sqrt(np.trapezoid(vo**2, t) / (t[-1] - t[0])))
         i_moy = u_moy / resistance_charge
         p_charge = u_eff**2 / resistance_charge
         ondulation = 2 * frequence
