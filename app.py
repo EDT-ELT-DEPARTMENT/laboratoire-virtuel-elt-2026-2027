@@ -260,6 +260,11 @@ COMPOSANTS = {
 # elles ne sont volontairement pas inventées lorsqu'elles ne sont pas connues.
 # ---------------------------------------------------------------------
 DOSSIER_PHOTOS_COMPOSANTS = BASE_DIR_LAB / "assets" / "composants"
+MARQUES_COMPOSANTS = {
+    "Schneider Electric": "schneider-electric",
+    "ABB": "abb",
+    "Siemens": "siemens",
+}
 
 DESCRIPTIONS_COMPOSANTS = {
     "Moteur asynchrone triphasé": ("Convertit l'énergie électrique triphasée en énergie mécanique par induction électromagnétique.", "Moteur triphasé", "Plaque signalétique : tension, couplage Δ/Y, puissance, courant, fréquence, cos φ, rendement et vitesse.", "U1, V1, W1 : début des enroulements ; U2, V2, W2 : fins ; PE : terre de protection.", "Entraînement de pompes, ventilateurs, convoyeurs et machines industrielles."),
@@ -311,7 +316,7 @@ def _slug_composant(nom):
     texte = "".join(c for c in texte if not unicodedata.combining(c)).lower()
     return re.sub(r"[^a-z0-9]+", "-", texte).strip("-")
 
-def fiche_composant(nom, categorie, bornes):
+def fiche_composant(nom, categorie, bornes, marque="Schneider Electric"):
     fiche = DESCRIPTIONS_COMPOSANTS.get(nom)
     if fiche is None:
         fiche = _fiche_generique(nom, categorie)
@@ -321,18 +326,20 @@ def fiche_composant(nom, categorie, bornes):
     return {
         "fonction": fonction, "symbole": SYMBOLES_ELECTRIQUES.get(nom, f"─[ {symbole} ]─"),
         "caracteristiques": caracteristiques, "bornes": bornes_desc, "utilisation": utilisation,
-        "photo": DOSSIER_PHOTOS_COMPOSANTS / f"{_slug_composant(nom)}.jpg",
+        "photo": DOSSIER_PHOTOS_COMPOSANTS / MARQUES_COMPOSANTS.get(marque, "schneider-electric") / f"{_slug_composant(nom)}.jpg",
+        "marque": marque,
     }
 
 def afficher_photo_composant(nom, fiche, width=None):
     chemin = fiche["photo"]
     if chemin.is_file():
-        st.image(str(chemin), caption=f"Photographie réelle — {nom}", use_container_width=True)
+        st.image(str(chemin), caption=f"Illustration générée par IA — {fiche['marque']} — {nom}", use_container_width=True)
     else:
         st.info(
-            f"Photo locale non installée pour **{nom}**. "
-            f"Ajoutez une photographie réelle sous le nom `{chemin.name}` dans "
-            "`assets/composants/`."
+            f"Aucune illustration IA installée pour **{nom}** dans le dossier de la marque **{fiche['marque']}**. "
+            f"Pour l’ajouter, placez le fichier `{chemin.name}` dans le dossier "
+            f"`assets/composants/{MARQUES_COMPOSANTS.get(fiche['marque'], 'schneider-electric')}/`. "
+            "Les images sont des illustrations pédagogiques IA non contractuelles : elles ne représentent pas un modèle commercial exact du fabricant sélectionné."
         )
 
 # ---------------------------------------------------------------------
@@ -1009,14 +1016,21 @@ if espace == "🏠 Accueil":
 
 elif espace == "🧰 Bibliothèque de composants":
     st.title("🧰 Bibliothèque de composants électriques")
-    st.write("Recherchez un composant, consultez sa photographie réelle, son symbole électrique et sa fiche technique.")
+    st.write("Recherchez un composant, consultez son illustration générée par IA, son symbole électrique et sa fiche technique.")
     total_composants = sum(len(v) for v in COMPOSANTS.values())
-    nb_photos = sum(1 for elements in COMPOSANTS.values() for nom in elements
-                    if fiche_composant(nom, next(c for c, e in COMPOSANTS.items() if nom in e), elements[nom])["photo"].is_file())
+    marque_bibliotheque = st.selectbox(
+        "🏷️ Choisir la marque des composants",
+        list(MARQUES_COMPOSANTS.keys()),
+        key="marque_bibliotheque",
+        help="La photographie affichée dépend de la marque sélectionnée. Les symboles électriques restent normalisés.",
+    )
+    st.caption("🖼️ Illustrations générées par IA : visuels pédagogiques pour reconnaître les familles d'appareils. Elles ne sont pas des photographies officielles ni des références commerciales exactes Schneider Electric, ABB ou Siemens.")
+    nb_photos = sum(1 for cat, elements in COMPOSANTS.items() for nom, bornes in elements.items()
+                    if fiche_composant(nom, cat, bornes, marque_bibliotheque)["photo"].is_file())
     m1, m2, m3 = st.columns(3)
     m1.metric("Composants référencés", total_composants)
     m2.metric("Catégories", len(COMPOSANTS))
-    m3.metric("Photographies locales installées", f"{nb_photos}/{total_composants}")
+    m3.metric("Illustrations IA installées", f"{nb_photos}/{total_composants}")
     recherche_bib = st.text_input("🔎 Rechercher par nom", placeholder="Ex. moteur, contacteur, diode, Arduino…", key="recherche_bibliotheque")
     categories_bib = ["Toutes les catégories"] + list(COMPOSANTS.keys())
     categorie_bib = st.selectbox("Catégorie", categories_bib, key="categorie_bibliotheque")
@@ -1032,7 +1046,7 @@ elif espace == "🧰 Bibliothèque de composants":
     if not liste_bib:
         st.warning("Aucun composant ne correspond à cette recherche.")
     for cat, nom, bornes in liste_bib:
-        fiche = fiche_composant(nom, cat, bornes)
+        fiche = fiche_composant(nom, cat, bornes, marque_bibliotheque)
         with st.expander(f"⚡ {nom}  ·  {cat}", expanded=(len(liste_bib) == 1)):
             gauche, droite = st.columns([1.05, 1.4], gap="large")
             with gauche:
@@ -1084,6 +1098,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
     col_bib, col_canvas = st.columns([1, 3], gap="large")
     with col_bib:
         st.subheader("🧰 Bibliothèque")
+        marque_graphique = st.selectbox("🏷️ Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_graphique")
+        st.caption("Illustrations IA pédagogiques, non contractuelles ; vérifier les bornes sur la notice du modèle réel.")
         categorie_graph = st.selectbox("Catégorie", list(COMPOSANTS.keys()), key="cat_graphique")
         recherche_graph = st.text_input("Rechercher un composant", key="recherche_composant_graph")
         choix_graph = [n for n in COMPOSANTS[categorie_graph] if recherche_graph.casefold() in n.casefold()]
@@ -1091,7 +1107,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
             st.warning("Aucun composant trouvé dans cette catégorie.")
             choix_graph = list(COMPOSANTS[categorie_graph])
         composant_graph = st.selectbox("Composant", choix_graph, key="composant_graphique")
-        fiche_graph = fiche_composant(composant_graph, categorie_graph, COMPOSANTS[categorie_graph][composant_graph])
+        fiche_graph = fiche_composant(composant_graph, categorie_graph, COMPOSANTS[categorie_graph][composant_graph], marque_graphique)
         afficher_photo_composant(composant_graph, fiche_graph)
         st.caption(f"Symbole : {fiche_graph['symbole']}")
         if st.button("➕ Placer dans le circuit", use_container_width=True):
