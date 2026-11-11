@@ -585,835 +585,6 @@ def liste_composants_selectionnes(noms):
     return resultat
 
 
-def laboratoire_enseignant_interactif():
-    """Laboratoire enseignant entièrement lié : le TP généré commande la simulation, les mesures, l'oscilloscope et le corrigé."""
-
-    st.divider()
-    st.header("🧪 Laboratoire virtuel enseignant")
-    st.caption(
-        "Générez d'abord le TP : la simulation, les mesures, l'oscilloscope "
-        "et le corrigé utilisent automatiquement la même configuration."
-    )
-
-    onglets = st.tabs([
-        "1. Générateur de TP",
-        "2. Simulation et mesures",
-        "3. Oscilloscope virtuel",
-        "4. Corrigé confidentiel",
-    ])
-
-    # ------------------------------------------------------------------
-    # 1. Générateur de TP
-    # ------------------------------------------------------------------
-    with onglets[0]:
-
-        col_tp, col_marque = st.columns([3, 2])
-
-        with col_tp:
-            tp_lab = st.selectbox(
-                "Sélectionner le TP",
-                list(TPS.keys()),
-                key="lab_tp_selection"
-            )
-
-        with col_marque:
-            marque_lab = st.selectbox(
-                "Marque des composants",
-                list(MARQUES_COMPOSANTS.keys()),
-                key="lab_marque"
-            )
-
-        tp_data = TPS[tp_lab]
-        st.info(tp_data["description"])
-
-        composants_possibles = sorted(
-            {composant for elements in COMPOSANTS.values() for composant in elements}
-        )
-
-        composants_lab = st.multiselect(
-            "Composants du montage",
-            composants_possibles,
-            default=[
-                composant
-                for composant in tp_data["composants"]
-                if composant in composants_possibles
-            ],
-            key="lab_composants"
-        )
-
-        st.subheader("Paramètres électriques et mécaniques")
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        with c1:
-            u_lab = st.slider(
-                "Tension d'alimentation U (V)",
-                0.0,
-                600.0,
-                24.0,
-                0.5,
-                key="lab_u"
-            )
-
-        with c2:
-            f_lab = st.slider(
-                "Fréquence f (Hz)",
-                0.0,
-                400.0,
-                50.0,
-                0.5,
-                key="lab_f"
-            )
-
-        with c3:
-            r_lab = st.slider(
-                "Résistance R (Ω)",
-                0.1,
-                10000.0,
-                100.0,
-                0.1,
-                key="lab_r"
-            )
-
-        with c4:
-            c_lab = st.slider(
-                "Capacité C (µF)",
-                0.0,
-                10000.0,
-                100.0,
-                1.0,
-                key="lab_c"
-            )
-
-        c5, c6, c7, c8 = st.columns(4)
-
-        with c5:
-            l_lab = st.slider(
-                "Inductance L (mH)",
-                0.0,
-                5000.0,
-                100.0,
-                1.0,
-                key="lab_l"
-            )
-
-        with c6:
-            couple_lab = st.slider(
-                "Couple de charge (N·m)",
-                0.0,
-                200.0,
-                10.0,
-                0.5,
-                key="lab_couple"
-            )
-
-        with c7:
-            vitesse_lab = st.slider(
-                "Vitesse moteur (tr/min)",
-                0.0,
-                6000.0,
-                1450.0,
-                10.0,
-                key="lab_vitesse"
-            )
-
-        with c8:
-            pot_lab = st.slider(
-                "Potentiomètre (%)",
-                0.0,
-                100.0,
-                50.0,
-                1.0,
-                key="lab_pot"
-            )
-
-        st.subheader("Commandes des appareils de laboratoire")
-
-        col_v, col_a, col_m = st.columns(3)
-
-        with col_v:
-            st.markdown("**Voltmètre**")
-
-            calibre_v = st.select_slider(
-                "Calibre",
-                ["200 mV", "2 V", "20 V", "200 V", "600 V"],
-                value="200 V",
-                key="lab_cal_v"
-            )
-
-            mode_v = st.radio(
-                "Mode",
-                ["DC", "AC"],
-                horizontal=True,
-                key="lab_mode_v"
-            )
-
-        with col_a:
-            st.markdown("**Ampèremètre**")
-
-            calibre_a = st.select_slider(
-                "Calibre",
-                ["200 µA", "2 mA", "20 mA", "200 mA", "2 A", "10 A", "20 A"],
-                value="10 A",
-                key="lab_cal_a"
-            )
-
-            mode_a = st.radio(
-                "Mode",
-                ["DC", "AC"],
-                horizontal=True,
-                key="lab_mode_a"
-            )
-
-        with col_m:
-            st.markdown("**Multimètre**")
-
-            fonction_m = st.selectbox(
-                "Fonction",
-                [
-                    "Tension DC",
-                    "Tension AC",
-                    "Courant DC",
-                    "Courant AC",
-                    "Résistance",
-                    "Continuité",
-                    "Fréquence"
-                ],
-                key="lab_fonction_m"
-            )
-
-            calibre_m = st.select_slider(
-                "Calibre",
-                [
-                    "Auto",
-                    "200 mV",
-                    "2 V",
-                    "20 V",
-                    "200 V",
-                    "600 V",
-                    "2 mA",
-                    "200 mA",
-                    "10 A",
-                    "2 kΩ",
-                    "2 MΩ"
-                ],
-                value="Auto",
-                key="lab_cal_m"
-            )
-
-        col_alim, col_mot, col_pot = st.columns(3)
-
-        with col_alim:
-            st.markdown("**Alimentation de laboratoire**")
-
-            u_alim = st.slider(
-                "Tension de sortie (V)",
-                0.0,
-                60.0,
-                12.0,
-                0.1,
-                key="lab_alim_u"
-            )
-
-            i_max = st.slider(
-                "Limitation de courant (A)",
-                0.0,
-                10.0,
-                2.0,
-                0.05,
-                key="lab_alim_imax"
-            )
-
-        with col_mot:
-            st.markdown("**Moteur**")
-
-            couple_moteur = st.slider(
-                "Couple mécanique demandé (N·m)",
-                0.0,
-                200.0,
-                10.0,
-                0.5,
-                key="lab_mot_couple"
-            )
-
-            vitesse_moteur = st.slider(
-                "Consigne de vitesse (tr/min)",
-                0.0,
-                6000.0,
-                1450.0,
-                10.0,
-                key="lab_mot_vitesse"
-            )
-
-        with col_pot:
-            st.markdown("**Potentiomètre**")
-
-            valeur_pot = st.slider(
-                "Position du curseur (%)",
-                0.0,
-                100.0,
-                50.0,
-                1.0,
-                key="lab_pot_curseur"
-            )
-
-            st.caption(
-                f"Résistance entre curseur et borne A : "
-                f"{valeur_pot / 100 * 1000:.0f} Ω pour un potentiomètre de 1 kΩ."
-            )
-
-        st.divider()
-
-        if st.button(
-            "⚙️ Générer et appliquer le TP",
-            type="primary",
-            use_container_width=True,
-            key="lab_generer_tp"
-        ):
-            st.session_state["lab_configuration"] = {
-                "tp": tp_lab,
-                "marque": marque_lab,
-                "composants": composants_lab,
-                "u": u_lab,
-                "f": f_lab,
-                "r": r_lab,
-                "c": c_lab * 1e-6,
-                "l": l_lab * 1e-3,
-                "couple": couple_lab,
-                "vitesse": vitesse_lab,
-                "u_alim": u_alim,
-                "i_max": i_max,
-                "pot": valeur_pot,
-                "calibre_v": calibre_v,
-                "mode_v": mode_v,
-                "calibre_a": calibre_a,
-                "mode_a": mode_a,
-                "fonction_m": fonction_m,
-                "calibre_m": calibre_m
-            }
-            st.session_state["lab_osc_actif"] = True
-            st.success(
-                f"TP « {tp_lab} » généré. Les autres onglets utilisent maintenant cette configuration."
-            )
-
-    configuration = st.session_state.get("lab_configuration")
-
-    # ------------------------------------------------------------------
-    # 2. Simulation et mesures liées au TP généré
-    # ------------------------------------------------------------------
-    with onglets[1]:
-
-        st.subheader("Simulation liée au TP généré")
-
-        if configuration is None:
-            st.warning(
-                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
-            )
-
-        else:
-            st.success(
-                f"TP actif : {configuration['tp']} — "
-                f"tension {configuration['u']:.4g} V — "
-                f"fréquence {configuration['f']:.4g} Hz"
-            )
-
-            u = configuration["u"]
-            f = configuration["f"]
-            r = max(configuration["r"], 1e-6)
-            c = configuration["c"]
-            l = configuration["l"]
-            tp_actif = configuration["tp"]
-
-            if "Graetz" in tp_actif or "Redressement" in tp_actif:
-
-                v_moy = 0.9 * u
-                i_moy = v_moy / r
-                p_moy = v_moy * i_moy
-
-                grandeurs = {
-                    "Tension moyenne DC": (v_moy, "V"),
-                    "Courant moyen DC": (i_moy, "A"),
-                    "Puissance DC": (p_moy, "W"),
-                    "Fréquence d'ondulation": (2 * f, "Hz")
-                }
-
-            elif "RC" in tp_actif:
-
-                tau = r * c
-                v_final = u
-                i_initial = u / r
-
-                grandeurs = {
-                    "Constante de temps τ": (tau, "s"),
-                    "Tension finale du condensateur": (v_final, "V"),
-                    "Courant initial": (i_initial, "A"),
-                    "Fréquence": (f, "Hz")
-                }
-
-            elif "Arduino" in tp_actif:
-
-                v_led = 2.0
-                i_led = max(0.0, (u - v_led) / r) * 1000
-
-                grandeurs = {
-                    "Courant LED": (i_led, "mA"),
-                    "Tension résistance": (max(0.0, u - v_led), "V"),
-                    "Puissance résistance": (
-                        max(0.0, u - v_led) ** 2 / r * 1000,
-                        "mW"
-                    )
-                }
-
-            elif "moteur asynchrone" in tp_actif.lower():
-
-                p_utile = max(
-                    0.05,
-                    configuration["couple"] * configuration["vitesse"]
-                    * 2 * math.pi / 60 / 1000
-                )
-
-                rendement = 0.86
-                cos_phi = 0.82
-
-                p_absorbee = p_utile / rendement
-                s = p_absorbee / cos_phi
-                i_ligne = s * 1000 / (math.sqrt(3) * max(u, 1.0))
-                couple = 9550 * p_utile / max(configuration["vitesse"], 1.0)
-
-                grandeurs = {
-                    "Puissance utile": (p_utile, "kW"),
-                    "Puissance absorbée": (p_absorbee, "kW"),
-                    "Courant de ligne": (i_ligne, "A"),
-                    "Couple": (couple, "N·m"),
-                    "Vitesse": (configuration["vitesse"], "tr/min"),
-                    "Rendement": (rendement * 100, "%"),
-                    "Fréquence": (f, "Hz")
-                }
-
-            else:
-
-                i_dc = u / r
-                p_dc = u * i_dc
-
-                grandeurs = {
-                    "Tension": (u, "V"),
-                    "Courant": (i_dc, "A"),
-                    "Puissance": (p_dc, "W"),
-                    "Résistance": (r, "Ω"),
-                    "Fréquence": (f, "Hz")
-                }
-
-            grandeurs["Tension"] = (u, "V")
-            grandeurs["Courant"] = (
-                grandeurs.get(
-                    "Courant moyen DC",
-                    grandeurs.get(
-                        "Courant initial",
-                        grandeurs.get("Courant de ligne", (0.0, "A"))
-                    )
-                )[0],
-                "A"
-            )
-
-            grandeurs["Puissance"] = (
-                grandeurs.get(
-                    "Puissance DC",
-                    grandeurs.get("Puissance absorbée", (0.0, "W"))
-                )[0],
-                "W"
-            )
-
-            grandeurs["Fréquence"] = (f, "Hz")
-            grandeurs["Vitesse"] = (configuration["vitesse"], "tr/min")
-            grandeurs["Couple"] = (configuration["couple"], "N·m")
-            grandeurs["Rendement"] = (
-                grandeurs.get("Rendement", (0.0, "%"))[0],
-                "%"
-            )
-
-            st.subheader("Mesures numériques")
-
-            choix_mesure = st.selectbox(
-                "Grandeur à afficher",
-                [
-                    "Tension",
-                    "Courant",
-                    "Puissance",
-                    "Fréquence",
-                    "Vitesse",
-                    "Couple",
-                    "Rendement",
-                    "Constante de temps τ",
-                    "Tension moyenne DC",
-                    "Courant moyen DC",
-                    "Courant LED"
-                ],
-                key="lab_grandeur_mesuree"
-            )
-
-            if choix_mesure in grandeurs:
-
-                valeur, unite = grandeurs[choix_mesure]
-
-                calibres = {
-                    "V": ["200 mV", "2 V", "20 V", "200 V", "600 V"],
-                    "A": [
-                        "200 µA",
-                        "2 mA",
-                        "20 mA",
-                        "200 mA",
-                        "2 A",
-                        "10 A",
-                        "20 A"
-                    ]
-                }
-
-                facteurs = {
-                    "mV": 1e-3,
-                    "V": 1.0,
-                    "µA": 1e-6,
-                    "mA": 1e-3,
-                    "A": 1.0
-                }
-
-                if unite in calibres:
-                    calibre_actif = (
-                        configuration["calibre_v"]
-                        if unite == "V"
-                        else configuration["calibre_a"]
-                    )
-                    nombre, prefixe = calibre_actif.split()
-                    limite = float(nombre) * facteurs[prefixe]
-                    depassement = abs(valeur) > limite
-                else:
-                    calibre_actif = "Automatique"
-                    depassement = False
-
-                col_res1, col_res2 = st.columns([1, 2])
-
-                with col_res1:
-                    if depassement:
-                        st.error("OL — dépassement de calibre")
-                    else:
-                        st.metric(
-                            choix_mesure,
-                            f"{valeur:.3g} {unite}"
-                        )
-
-                with col_res2:
-                    st.caption(
-                        f"Calibre actif : {calibre_actif} — "
-                        f"mode {configuration['mode_v'] if unite == 'V' else configuration['mode_a']}"
-                    )
-
-            else:
-                st.warning(
-                    "Cette grandeur n'est pas disponible pour le TP sélectionné."
-                )
-
-            st.subheader("Résultats calculés")
-
-            lignes = []
-
-            for nom_grandeur, (valeur, unite) in grandeurs.items():
-                lignes.append(
-                    {
-                        "Grandeur": nom_grandeur,
-                        "Valeur": f"{valeur:.4g}",
-                        "Unité": unite
-                    }
-                )
-
-            st.dataframe(
-                pd.DataFrame(lignes),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            courant_calcule = grandeurs.get("Courant", (0.0, "A"))[0]
-
-            if configuration["i_max"] > 0 and courant_calcule > configuration["i_max"]:
-                st.warning(
-                    "⚠️ Limitation de courant de l'alimentation atteinte."
-                )
-
-    # ------------------------------------------------------------------
-    # 3. Oscilloscope lié au TP généré
-    # ------------------------------------------------------------------
-    with onglets[2]:
-
-        st.subheader("Oscilloscope virtuel")
-
-        if configuration is None:
-            st.warning(
-                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
-            )
-
-        else:
-
-            col_o1, col_o2, col_o3, col_o4 = st.columns(4)
-
-            with col_o1:
-                canal = st.selectbox(
-                    "Canal affiché",
-                    [
-                        "CH1 — Tension",
-                        "CH2 — Courant",
-                        "CH1 + CH2"
-                    ],
-                    key="lab_osc_canal"
-                )
-
-                v_div = st.select_slider(
-                    "V/div",
-                    [
-                        "50 mV",
-                        "100 mV",
-                        "200 mV",
-                        "500 mV",
-                        "1 V",
-                        "2 V",
-                        "5 V",
-                        "10 V",
-                        "20 V",
-                        "50 V",
-                        "100 V"
-                    ],
-                    value="10 V",
-                    key="lab_osc_vdiv"
-                )
-
-            with col_o2:
-                t_div = st.select_slider(
-                    "s/div",
-                    [
-                        "100 µs",
-                        "200 µs",
-                        "500 µs",
-                        "1 ms",
-                        "2 ms",
-                        "5 ms",
-                        "10 ms",
-                        "20 ms",
-                        "50 ms"
-                    ],
-                    value="5 ms",
-                    key="lab_osc_tdiv"
-                )
-
-                couplage = st.radio(
-                    "Couplage",
-                    ["DC", "AC"],
-                    horizontal=True,
-                    key="lab_osc_couplage"
-                )
-
-            with col_o3:
-                declenchement = st.slider(
-                    "Niveau de déclenchement (V)",
-                    -300.0,
-                    300.0,
-                    0.0,
-                    0.5,
-                    key="lab_osc_trigger"
-                )
-
-                pente = st.selectbox(
-                    "Pente",
-                    ["Montante", "Descendante"],
-                    key="lab_osc_pente"
-                )
-
-            with col_o4:
-                curseur1 = st.slider(
-                    "Curseur 1 (ms)",
-                    0.0,
-                    100.0,
-                    20.0,
-                    0.5,
-                    key="lab_osc_curseur1"
-                )
-
-                curseur2 = st.slider(
-                    "Curseur 2 (ms)",
-                    0.0,
-                    100.0,
-                    60.0,
-                    0.5,
-                    key="lab_osc_curseur2"
-                )
-
-            u_osc = configuration["u"]
-            f_osc = configuration["f"]
-            r_osc = max(configuration["r"], 1e-6)
-            mode_osc = configuration["mode_v"]
-
-            if mode_osc == "AC":
-                amplitude = u_osc / math.sqrt(2)
-                t = np.linspace(0, 10 / max(f_osc, 0.1), 2000)
-                ch1 = amplitude * np.sin(2 * math.pi * f_osc * t)
-                ch2 = amplitude / r_osc * np.sin(2 * math.pi * f_osc * t)
-
-            else:
-                amplitude = u_osc / 2
-                t = np.linspace(0, 0.1, 2000)
-                ch1 = np.full_like(t, u_osc)
-                ch2 = np.full_like(t, u_osc / r_osc)
-
-            if couplage == "AC":
-                ch1 = ch1 - np.mean(ch1)
-                ch2 = ch2 - np.mean(ch2)
-
-            fig = go.Figure()
-
-            if "CH1" in canal:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t * 1000,
-                        y=ch1,
-                        name="CH1 — Tension",
-                        line=dict(color="#2563eb", width=2)
-                    )
-                )
-
-            if "CH2" in canal:
-                fig.add_trace(
-                    go.Scatter(
-                        x=t * 1000,
-                        y=ch2,
-                        name="CH2 — Courant",
-                        line=dict(color="#dc2626", width=2),
-                        yaxis="y2"
-                    )
-                )
-
-            fig.add_hline(
-                y=declenchement,
-                line_dash="dash",
-                line_color="green",
-                annotation_text="Trigger"
-            )
-
-            fig.add_vline(
-                x=curseur1,
-                line_dash="dot",
-                line_color="orange",
-                annotation_text="Curseur 1"
-            )
-
-            fig.add_vline(
-                x=curseur2,
-                line_dash="dot",
-                line_color="purple",
-                annotation_text="Curseur 2"
-            )
-
-            fig.update_layout(
-                title=(
-                    f"Oscilloscope — {configuration['tp']} — "
-                    f"{v_div}/div, {t_div}/div, couplage {couplage}"
-                ),
-                xaxis_title="Temps (ms)",
-                yaxis_title="Tension (V)",
-                yaxis2=dict(
-                    title="Courant (A)",
-                    overlaying="y",
-                    side="right",
-                    showgrid=False
-                ),
-                height=430,
-                margin=dict(l=10, r=10, t=45, b=10)
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                key="lab_oscilloscope"
-            )
-
-            st.caption(
-                f"Signaux calculés à partir du TP « {configuration['tp']} », "
-                f"de la tension {u_osc:.4g} V et de la fréquence {f_osc:.4g} Hz."
-            )
-
-    # ------------------------------------------------------------------
-    # 4. Corrigé confidentiel lié au TP généré
-    # ------------------------------------------------------------------
-    with onglets[3]:
-
-        st.subheader("🔒 Corrigé confidentiel")
-
-        if configuration is None:
-            st.warning(
-                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
-            )
-
-        else:
-            tp_corrige = configuration["tp"]
-            tp_data_corrige = TPS[tp_corrige]
-
-            st.info(
-                f"Corrigé du TP généré : {tp_corrige}"
-            )
-
-            mot_de_passe_corrige = st.text_input(
-                "Mot de passe du corrigé",
-                type="password",
-                key="lab_mdp_corrige"
-            )
-
-            if st.button(
-                "Afficher le corrigé",
-                type="primary",
-                use_container_width=True,
-                key="lab_afficher_corrige"
-            ):
-                cle = obtenir_mot_de_passe_enseignant()
-
-                if cle and hmac.compare_digest(mot_de_passe_corrige, cle):
-                    st.session_state["lab_corrige_autorise"] = True
-                else:
-                    st.error("Mot de passe incorrect.")
-                    st.session_state["lab_corrige_autorise"] = False
-
-            if st.session_state.get("lab_corrige_autorise"):
-
-                st.success("Accès au corrigé autorisé.")
-
-                st.plotly_chart(
-                    creer_schema_tp(tp_corrige),
-                    use_container_width=True,
-                    key="lab_schema_corrige"
-                )
-
-                liaisons = tp_data_corrige.get("liaisons", [])
-
-                if liaisons:
-                    st.dataframe(
-                        pd.DataFrame(
-                            [
-                                {
-                                    "Borne de départ": a,
-                                    "Borne d'arrivée": b
-                                }
-                                for a, b in liaisons
-                            ]
-                        ),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                else:
-                    st.info(
-                        "Aucune liaison de référence n'est enregistrée pour ce TP."
-                    )
-
-            else:
-                st.info(
-                    "Entrez le mot de passe enseignant pour consulter "
-                    "le schéma câblé de référence."
-                )
-
-
 def normaliser_liaison(a, b):
     """Une liaison est considérée identique quel que soit son sens."""
     return tuple(sorted((str(a).strip(), str(b).strip())))
@@ -2618,395 +1789,536 @@ elif espace == "🧩 Éditeur graphique de circuits":
                 st.dataframe(pd.DataFrame(resultat_graph["details"]), use_container_width=True, hide_index=True)
 
 elif espace == "🧪 Réaliser un TP":
-    st.title("🧪 Réalisation et validation d'un TP")
-    if not identite_complete:
-        st.warning("Saisissez un matricule étudiant valide dans la barre latérale pour accéder uniquement aux TP de votre promotion, groupe et sous-groupe.")
+    st.title("🧪 Mon espace de travaux pratiques")
+    st.caption("Sélectionnez votre TP, réalisez le câblage, lancez la simulation, puis mesurez les grandeurs électriques.")
+
+    if not identitecomplete:
+        st.warning("Saisissez votre matricule étudiant dans la barre latérale pour accéder à vos TP.")
         st.stop()
+
     if df_edt_lab.empty:
-        st.error("Le fichier dataEDT-ELT-S1-2027.xlsx est absent ou ne contient pas les colonnes attendues.")
+        st.error("Le fichier de l'emploi du temps est absent ou ne contient pas les colonnes attendues.")
         st.stop()
 
     st.success(
-        f"Étudiant : {prenom} {nom} · Promotion : {promotion} · "
-        f"Groupe : {groupe or '—'} · Sous-groupe : {sous_groupe or '—'}"
+        f"Étudiant : {prenom} {nom} — Promotion {promotion} — "
+        f"Groupe {groupe or 'non renseigné'} — Sous-groupe {sous_groupe or 'non renseigné'}"
     )
-    tp_etudiant_df = _lab_tp_etudiant(etudiant_connecte, df_edt_lab)
+
+    tp_etudiant_df = lab_tp_etudiant(etudiant_connecte, df_edt_lab)
+
     if tp_etudiant_df.empty:
-        st.warning("Aucun TP n'a été trouvé dans l'EDT pour votre promotion et votre groupe/sous-groupe. Vérifiez votre inscription auprès de l'administration.")
+        st.warning("Aucun TP n'est programmé pour votre promotion, votre groupe et votre sous-groupe.")
         st.stop()
 
-    options_tp_edt = sorted(tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(), key=lambda x: _lab_normaliser(x))
-    st.caption(f"{len(options_tp_edt)} intitulé(s) de TP disponible(s) pour votre inscription.")
-    tp_edt_choisi = st.selectbox(
-        "Choisir le travail pratique",
-        options_tp_edt,
-        key=f"tp_edt_etudiant_{_lab_normaliser_matricule(matricule_etudiant)}",
-    )
-    lignes_tp_choisi = tp_etudiant_df[
-        tp_etudiant_df["Enseignements"].astype(str).str.strip().eq(tp_edt_choisi)
-    ].copy()
-    enseignants_tp = sorted({
-        _lab_nettoyer_texte(x) for x in lignes_tp_choisi["Enseignants"].tolist()
-        if _lab_nettoyer_texte(x)
-    })
-    st.subheader("👨‍🏫 Chargé(s) de matière")
-    if enseignants_tp:
-        for enseignant in enseignants_tp:
-            st.markdown(f"- **{enseignant}**")
-    else:
-        st.warning("Aucun enseignant n'est renseigné pour ce TP dans l'EDT.")
-    infos_tp = lignes_tp_choisi[["Jours", "Horaire", "Lieu"]].drop_duplicates()
-    if not infos_tp.empty:
-        st.caption("Séances programmées pour ce TP :")
-        st.dataframe(infos_tp, use_container_width=True, hide_index=True)
+    st.subheader("1. Mes travaux pratiques")
 
-    tp_nom = _lab_modele_simulation_depuis_tp(tp_edt_choisi)
+    options_tp = sorted(
+        tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(),
+        key=lambda x: lab_normaliser(x)
+    )
+
+    tp_choisi = st.selectbox(
+        "Choisir le TP correspondant à mon emploi du temps",
+        options_tp,
+        key="etu_tp_choisi"
+    )
+
+    lignes_tp = tp_etudiant_df[
+        tp_etudiant_df["Enseignements"].astype(str).str.strip().eq(tp_choisi)
+    ].copy()
+
+    enseignants_tp = sorted(
+        {lab_nettoyer_texte(x) for x in lignes_tp["Enseignants"].tolist() if lab_nettoyer_texte(x)}
+    )
+
+    col_info1, col_info2 = st.columns(2)
+
+    with col_info1:
+        st.markdown("**Enseignants chargés du TP**")
+        if enseignants_tp:
+            for enseignant in enseignants_tp:
+                st.markdown(f"- {enseignant}")
+        else:
+            st.warning("Aucun enseignant n'est renseigné pour ce TP.")
+
+    with col_info2:
+        st.markdown("**Séances programmées**")
+        infos_tp = lignes_tp[["Jours", "Horaire", "Lieu"]].drop_duplicates()
+        if not infos_tp.empty:
+            st.dataframe(infos_tp, use_container_width=True, hide_index=True)
+        else:
+            st.info("Aucune séance détaillée n'est disponible.")
+
+    tp_nom = lab_modele_simulation_depuis_tp(tp_choisi)
+
     if tp_nom is None or tp_nom not in TPS:
         st.info(
-            "Ce TP est bien associé à votre promotion et à votre groupe dans l'EDT. "
-            "Son intitulé et son enseignant sont affichés ci-dessus. "
-            "Son schéma interactif doit encore être défini dans la bibliothèque pédagogique "
-            "avant de lancer une simulation pour ce TP."
+            "Ce TP est bien associé à votre groupe dans l'emploi du temps. "
+            "Son modèle de simulation doit encore être activé par l'équipe pédagogique."
         )
         st.stop()
 
     tp = TPS[tp_nom]
-    if st.session_state.get("tp_realiser_courant") != tp_edt_choisi:
-        st.session_state.tp_realiser_courant = tp_edt_choisi
-        st.session_state.liaisons_etudiant = list(tp["liaisons"])
-        st.session_state.dernier_resultat = None
-        st.session_state.composants_tp_personnalises = list(tp["composants"])
-        st.session_state.pop("courbe_sonde_tp", None)
+    st.divider()
+
+    st.subheader("2. Banc de manipulation")
     st.info(tp["description"])
 
-    st.subheader("Schéma du TP chargé automatiquement")
-    st.caption("Le schéma ci-dessous affiche immédiatement les composants et les connexions du montage de référence. Il sert de point de départ ; vous pouvez ensuite créer votre propre montage.")
-    st.plotly_chart(creer_schema_tp(tp_nom), use_container_width=True, key="schema_tp_auto")
-    with st.expander("Voir les connexions du schéma de référence"):
-        st.dataframe(pd.DataFrame([{"Borne de départ": a, "Borne d'arrivée": b} for a, b in tp["liaisons"]]), use_container_width=True, hide_index=True)
+    st.markdown("**Matériel et composants à utiliser**")
+
+    colonnes_composants = st.columns(3)
+    for index, composant in enumerate(tp["composants"]):
+        categorie_composant = next(
+            (cat for cat, elements in COMPOSANTS.items() if composant in elements),
+            "Composants génériques"
+        )
+        bornes_composant = COMPOSANTS[categorie_composant][composant]
+        fiche = fiche_composant(
+            composant,
+            categorie_composant,
+            bornes_composant,
+            "Schneider Electric"
+        )
+
+        with colonnes_composants[index % 3]:
+            with st.container(border=True):
+                st.markdown(f"**{composant}**")
+                afficher_photo_composant(composant, fiche)
+                st.caption(f"Bornes : {', '.join(bornes_composant)}")
+                st.caption(fiche["fonction"])
 
     st.divider()
-    st.subheader("1. Créer ou modifier votre propre montage")
-    mode_montage = st.radio(
-        "Mode de travail", ["Partir du schéma fourni", "Créer un montage personnel"],
-        horizontal=True, key="mode_montage_tp"
-    )
-    if mode_montage == "Créer un montage personnel":
-        if st.button("Nouveau montage vierge", key="nouveau_montage_vierge"):
-            st.session_state.liaisons_etudiant = []
-            st.session_state.composants_tp_personnalises = []
-            st.rerun()
-        defauts_composants = st.session_state.get("composants_tp_personnalises", [])
-    else:
-        defauts_composants = list(tp["composants"])
-        st.session_state.composants_tp_personnalises = list(tp["composants"])
-        if not st.session_state.liaisons_etudiant:
-            st.session_state.liaisons_etudiant = list(tp["liaisons"])
 
-    tous_composants = sorted({c for groupe_c in COMPOSANTS.values() for c in groupe_c})
-    composants_choisis = st.multiselect(
-        "Composants placés sur votre plan de travail", options=tous_composants,
-        default=[c for c in defauts_composants if c in tous_composants],
-        key=f"composants_tp_multiselect_{tp_nom}_{mode_montage}",
-        help="Le mode TP charge les composants de référence. En montage personnel, choisissez librement les composants."
-    )
-    st.session_state.composants_tp_personnalises = list(composants_choisis)
-    bornes_disponibles = liste_composants_selectionnes(composants_choisis)
+    st.subheader("3. Réalisation du câblage")
 
-    st.markdown("**Ajouter un fil entre deux bornes**")
+    if st.session_state.get("etu_tp_courant") != tp_nom:
+        st.session_state["etu_tp_courant"] = tp_nom
+        st.session_state["liaisons_etudiant"] = list(tp["liaisons"])
+        st.session_state["etu_resultat_simulation"] = None
+
+    bornes_disponibles = liste_composants_selectionnes(tp["composants"])
+
     if not bornes_disponibles:
-        st.warning("Ajoutez au moins un composant pour afficher ses bornes.")
-    else:
-        with st.form("form_ajout_liaison", clear_on_submit=True):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                borne_depart = st.selectbox("Borne de départ", bornes_disponibles, key="borne_depart")
-            with col_b:
-                borne_arrivee = st.selectbox("Borne d'arrivée", bornes_disponibles, key="borne_arrivee")
-            ajouter = st.form_submit_button("➕ Ajouter la liaison")
-            if ajouter:
-                if borne_depart == borne_arrivee:
-                    st.error("Une borne ne peut pas être reliée à elle-même.")
-                elif (borne_depart, borne_arrivee) in st.session_state.liaisons_etudiant or (borne_arrivee, borne_depart) in st.session_state.liaisons_etudiant:
-                    st.warning("Cette liaison existe déjà.")
-                else:
-                    st.session_state.liaisons_etudiant.append((borne_depart, borne_arrivee))
-                    st.success("Liaison ajoutée.")
-                    st.rerun()
+        st.warning("Aucun composant n'est disponible pour ce TP.")
+        st.stop()
+
+    with st.form("form_cablage_etudiant", clear_on_submit=True):
+        col_depart, col_arrivee = st.columns(2)
+
+        with col_depart:
+            borne_depart = st.selectbox(
+                "Point de départ du câble",
+                bornes_disponibles,
+                key="etu_borne_depart"
+            )
+
+        with col_arrivee:
+            borne_arrivee = st.selectbox(
+                "Point d'arrivée du câble",
+                bornes_disponibles,
+                key="etu_borne_arrivee"
+            )
+
+        ajouter_cable = st.form_submit_button(
+            "🔌 Ajouter le câble",
+            use_container_width=True
+        )
+
+    if ajouter_cable:
+        if borne_depart == borne_arrivee:
+            st.error("Le point de départ et le point d'arrivée doivent être différents.")
+        elif (borne_depart, borne_arrivee) in st.session_state.liaisons_etudiant or (
+            borne_arrivee, borne_depart
+        ) in st.session_state.liaisons_etudiant:
+            st.warning("Cette connexion existe déjà.")
+        else:
+            st.session_state.liaisons_etudiant.append((borne_depart, borne_arrivee))
+            st.success("Câble ajouté.")
+            st.rerun()
 
     if st.session_state.liaisons_etudiant:
-        st.dataframe(pd.DataFrame([
-            {"N°": i + 1, "Départ": a, "Arrivée": b}
-            for i, (a, b) in enumerate(st.session_state.liaisons_etudiant)
-        ]), use_container_width=True, hide_index=True)
-        cdel, cclear = st.columns(2)
-        with cdel:
-            idx = st.number_input("N° de la liaison à retirer", min_value=1,
-                                  max_value=len(st.session_state.liaisons_etudiant), value=1, step=1,
-                                  key="liaison_a_supprimer_tp")
-            if st.button("Retirer cette liaison", key="retirer_liaison_tp"):
-                st.session_state.liaisons_etudiant.pop(int(idx) - 1)
-                st.rerun()
-        with cclear:
-            if st.button("Effacer toutes les liaisons", key="effacer_liaisons_tp"):
-                st.session_state.liaisons_etudiant = []
-                st.rerun()
+        st.markdown("**Câblage réalisé**")
 
-    st.divider()
-    st.subheader("2. Mesures et tracé des courbes")
-    st.caption("Choisissez le type de mesure et les bornes où placer les sondes. Les courbes sont des modèles pédagogiques du TP sélectionné ; elles ne prétendent pas être une mesure électrique issue d'un appareil réel tant que le circuit n'est pas résolu par le simulateur correspondant.")
-    type_mesure = st.selectbox("Appareil / grandeur à mesurer", ["Tension entre deux bornes (voltmètre)", "Courant dans un composant (ampèremètre)", "Tracer le signal temporel à l'oscilloscope"], key="type_mesure_tp")
-    borne_a = borne_b = "Non sélectionnée"
-    composant_courant = composants_choisis[0] if composants_choisis else "Aucun composant"
-    if "Tension" in type_mesure or "oscilloscope" in type_mesure.lower():
-        if bornes_disponibles:
-            mc1, mc2 = st.columns(2)
-            with mc1:
-                borne_a = st.selectbox("Sonde positive / CH1+", bornes_disponibles, key="sonde_positive_tp")
-            with mc2:
-                borne_b = st.selectbox("Sonde négative / référence", bornes_disponibles, key="sonde_negative_tp")
-            if borne_a == borne_b:
-                st.warning("Choisissez deux bornes différentes pour mesurer une différence de potentiel.")
+        for index, (depart, arrivee) in enumerate(st.session_state.liaisons_etudiant):
+            col_cable1, col_cable2, col_cable3 = st.columns([4, 4, 1])
+
+            with col_cable1:
+                st.write(f"**{depart}**")
+
+            with col_cable2:
+                st.write(f"→ **{arrivee}**")
+
+            with col_cable3:
+                if st.button("❌", key=f"etu_supprimer_cable_{index}"):
+                    st.session_state.liaisons_etudiant.pop(index)
+                    st.session_state["etu_resultat_simulation"] = None
+                    st.rerun()
     else:
-        if composants_choisis:
-            composant_courant = st.selectbox("Composant traversé par le courant", composants_choisis, key="composant_mesure_courant_tp")
-    if st.button("📈 Tracer la courbe", type="primary", key="tracer_courbe_sonde_tp"):
-        if not bornes_disponibles:
-            st.error("Ajoutez des composants avant de placer une sonde.")
-        elif ("Tension" in type_mesure or "oscilloscope" in type_mesure.lower()) and borne_a == borne_b:
-            st.error("Les deux sondes doivent être placées sur des bornes différentes.")
-        else:
-            st.session_state.courbe_sonde_tp = {
-                "type": type_mesure, "a": borne_a, "b": borne_b,
-                "composant": composant_courant, "tp": tp_nom,
-            }
-    sonde = st.session_state.get("courbe_sonde_tp")
-    if sonde and sonde.get("tp") == tp_nom:
-        st.plotly_chart(tracer_courbe_sonde(tp_nom, sonde["type"], sonde["a"], sonde["b"], sonde["composant"]), use_container_width=True)
-        st.caption(f"Sonde sélectionnée : {sonde['type']} · {sonde['a']} / {sonde['b']} · composant : {sonde['composant']}")
+        st.info("Aucun câble n'a encore été réalisé.")
 
-    st.divider()
-    st.subheader("3. Correction automatique du montage")
-    st.caption("La correction compare votre sélection et vos connexions au schéma de référence du TP.")
-    if st.button("✅ Vérifier et corriger mon montage", type="primary", use_container_width=True, key="verifier_montage_tp"):
-        if not identite_complete:
-            st.error("Identité non reconnue : vérifiez votre matricule étudiant dans la barre latérale.")
-        else:
-            resultat = corriger_montage(tp_nom, composants_choisis, st.session_state.liaisons_etudiant)
-            st.session_state.dernier_resultat = resultat
-            st.session_state.historique.append({
-                "Date": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "Nom": nom.strip(), "Prénom": prenom.strip(),
-                "Promotion": promotion.strip(), "Groupe": groupe.strip(),
-                "TP": tp_edt_choisi, "Chargé(s) de matière": ", ".join(enseignants_tp), "Note": resultat["note"],
-                "Résultat": "Réussi" if resultat["correct"] else "À corriger",
-            })
-    resultat = st.session_state.dernier_resultat
-    if resultat:
-        st.divider()
-        if resultat["correct"]:
-            st.balloons()
-            st.success("Excellent ! Tous les composants et câblages correspondent au corrigé de référence.")
-            st.metric("Note obtenue", "20 / 20")
-        else:
-            st.warning("Votre montage comporte des erreurs. Consultez le tableau de correction ci-dessous.")
-            st.metric("Note indicative", f'{resultat["note"]:.2f} / 20')
-            if resultat["details"]:
-                st.dataframe(pd.DataFrame(resultat["details"]), use_container_width=True, hide_index=True)
+    col_reset1, col_reset2 = st.columns(2)
 
-elif espace == "📈 Mesures réelles & comparaison":
-    st.title("📈 Comparaison théorie / expérience")
-    st.write(
-        "Importez un fichier de mesures. Choisissez les colonnes de l'axe X et de la mesure Y, "
-        "puis sélectionnez un modèle théorique pédagogique."
-    )
-    fichier = st.file_uploader(
-        "Importer les mesures expérimentales",
-        type=["xlsx", "xls", "csv"],
-        help="Formats acceptés : Excel .xlsx/.xls et CSV.",
-    )
-
-    if fichier is not None:
-        try:
-            if fichier.name.lower().endswith(".csv"):
-                try:
-                    donnees = pd.read_csv(fichier, sep=None, engine="python")
-                except UnicodeDecodeError:
-                    fichier.seek(0)
-                    donnees = pd.read_csv(fichier, sep=None, engine="python", encoding="latin-1")
-            else:
-                donnees = pd.read_excel(fichier)
-            donnees = donnees.dropna(how="all")
-            st.subheader("Aperçu des données")
-            st.dataframe(donnees.head(20), use_container_width=True)
-            colonnes = list(donnees.columns)
-            if len(colonnes) >= 2:
-                colx, coly = st.columns(2)
-                with colx:
-                    axe_x = st.selectbox("Colonne de l'axe X", colonnes, index=0)
-                with coly:
-                    axe_y = st.selectbox("Colonne de la mesure Y", colonnes, index=1)
-                modele = st.selectbox(
-                    "Modèle théorique de référence",
-                    [
-                        "Sinusoïde",
-                        "Redressement double alternance",
-                        "Réponse indicielle RC (charge)",
-                        "Vitesse moteur (montée simplifiée)",
-                        "Valeur constante",
-                    ],
-                )
-                amplitude = st.number_input("Amplitude théorique", value=10.0, step=1.0)
-                parametre = st.number_input(
-                    "Paramètre du modèle (fréquence / constante de temps)",
-                    min_value=0.001, value=1.0, step=0.1,
-                )
-                if st.button("📊 Tracer et comparer", type="primary"):
-                    travail = donnees[[axe_x, axe_y]].copy()
-                    travail[axe_x] = pd.to_numeric(travail[axe_x], errors="coerce")
-                    travail[axe_y] = pd.to_numeric(travail[axe_y], errors="coerce")
-                    travail = travail.dropna().sort_values(axe_x)
-                    if len(travail) < 2:
-                        st.error("Il faut au moins deux lignes numériques valides.")
-                    else:
-                        x = travail[axe_x].to_numpy(dtype=float)
-                        y = travail[axe_y].to_numpy(dtype=float)
-                        t = x - np.min(x)
-                        if modele == "Sinusoïde":
-                            y_theorie = amplitude * np.sin(2 * np.pi * parametre * t)
-                        elif modele == "Redressement double alternance":
-                            y_theorie = np.abs(amplitude * np.sin(2 * np.pi * parametre * t))
-                        elif modele == "Réponse indicielle RC (charge)":
-                            y_theorie = amplitude * (1 - np.exp(-t / parametre))
-                        elif modele == "Vitesse moteur (montée simplifiée)":
-                            y_theorie = amplitude * (1 - np.exp(-t / parametre))
-                        else:
-                            y_theorie = np.full_like(x, amplitude, dtype=float)
-
-                        ecart_abs = np.abs(y - y_theorie)
-                        masque = np.abs(y_theorie) > 1e-9
-                        erreurs_relatives = (ecart_abs[masque] / np.abs(y_theorie[masque])) * 100
-                        erreur_moyenne = float(np.mean(erreurs_relatives)) if len(erreurs_relatives) else float("nan")
-                        rmse = float(np.sqrt(np.mean((y - y_theorie) ** 2)))
-
-                        figure = go.Figure()
-                        figure.add_trace(go.Scatter(x=x, y=y_theorie, mode="lines", name="Théorie"))
-                        figure.add_trace(go.Scatter(x=x, y=y, mode="lines+markers", name="Mesures réelles"))
-                        figure.update_layout(
-                            title="Comparaison entre modèle théorique et mesures expérimentales",
-                            xaxis_title=str(axe_x), yaxis_title=str(axe_y),
-                            legend_title="Séries", hovermode="x unified",
-                        )
-                        st.plotly_chart(figure, use_container_width=True)
-                        m1, m2, m3 = st.columns(3)
-                        m1.metric("Erreur relative moyenne", "Non calculable" if math.isnan(erreur_moyenne) else f"{erreur_moyenne:.2f} %")
-                        m2.metric("RMSE", f"{rmse:.4g}")
-                        m3.metric("Nombre de mesures", len(y))
-                        rapport = travail.copy()
-                        rapport["Théorie"] = y_theorie
-                        rapport["Écart absolu"] = ecart_abs
-                        rapport["Erreur relative (%)"] = np.where(
-                            np.abs(y_theorie) > 1e-9,
-                            ecart_abs / np.abs(y_theorie) * 100,
-                            np.nan,
-                        )
-                        st.download_button(
-                            "⬇️ Télécharger le rapport comparatif CSV",
-                            data=rapport.to_csv(index=False).encode("utf-8-sig"),
-                            file_name="rapport_comparaison_theorie_experience.csv",
-                            mime="text/csv",
-                        )
-                        st.caption(
-                            "Le modèle théorique sélectionné est une référence simplifiée. "
-                            "Pour une validation scientifique, utilisez l'équation exacte du TP, "
-                            "les paramètres nominaux et les unités correctes."
-                        )
-            else:
-                st.error("Le fichier doit contenir au moins deux colonnes.")
-        except Exception as exc:
-            st.error(f"Impossible de lire le fichier : {exc}")
-            st.info("Vérifiez le format, les en-têtes et l'absence de fichier protégé par mot de passe.")
-
-elif espace == "👨‍🏫 Espace enseignant":
-    st.title("👨‍🏫 Espace enseignant — corrigés de câblage")
-    mot_de_passe_configure = obtenir_mot_de_passe_enseignant()
-    if not mot_de_passe_configure:
-        st.error("L'accès enseignant n'est pas encore configuré. Définissez le secret mot_de_passe_enseignant dans Streamlit Cloud → Settings → Secrets.")
-        st.code('mot_de_passe_enseignant = "VotreMotDePasseFort"', language="toml")
-        st.stop()
-
-    if not st.session_state.get("enseignant_authentifie", False):
-        st.info("Cet espace contient les montages de référence entièrement câblés. Il est réservé aux enseignants.")
-        mdp_saisi = st.text_input("Mot de passe enseignant", type="password", key="mdp_enseignant_saisi")
-        if st.button("🔐 Accéder à l'espace enseignant", type="primary", use_container_width=True):
-            if hmac.compare_digest(mdp_saisi, mot_de_passe_configure):
-                st.session_state.enseignant_authentifie = True
-                st.rerun()
-            else:
-                st.error("Mot de passe incorrect.")
-        st.stop()
-
-    entete1, entete2 = st.columns([4, 1])
-    with entete1:
-        st.success("Accès enseignant autorisé")
-    with entete2:
-        if st.button("🔒 Se déconnecter", use_container_width=True):
-            st.session_state.enseignant_authentifie = False
-            st.session_state.pop("mdp_enseignant_saisi", None)
+    with col_reset1:
+        if st.button("♻️ Recharger le câblage de référence", use_container_width=True):
+            st.session_state["liaisons_etudiant"] = list(tp["liaisons"])
+            st.session_state["etu_resultat_simulation"] = None
             st.rerun()
 
-    laboratoire_enseignant_interactif()
+    with col_reset2:
+        if st.button("🧹 Vider le câblage", use_container_width=True):
+            st.session_state["liaisons_etudiant"] = []
+            st.session_state["etu_resultat_simulation"] = None
+            st.rerun()
+
     st.divider()
 
-    st.subheader("🧪 TP simulés — câblages de référence")
-    st.caption("Sélectionnez une manipulation pour consulter le montage complet, avec tous les composants et les conducteurs déjà reliés selon le corrigé enregistré dans TPS.")
-    tp_reference_enseignant = st.selectbox("Manipulation / TP", list(TPS.keys()), key="tp_reference_enseignant")
-    marque_reference = st.selectbox("Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_reference_enseignant")
-    cle_reference = f"{tp_reference_enseignant}|{marque_reference}"
-    if st.session_state.get("reference_chargee_enseignant") != cle_reference:
-        circuit_ref, bornes_ref = construire_circuit_reference_enseignant(tp_reference_enseignant, marque_reference)
-        st.session_state.circuit_reference_enseignant = circuit_ref
-        st.session_state.bornes_reference_enseignant = bornes_ref
-        st.session_state.reference_chargee_enseignant = cle_reference
-    st.write(TPS[tp_reference_enseignant]["description"])
-    if STREAMLIT_FLOW_DISPONIBLE:
-        st.markdown("**Montage de référence pré-câblé**")
-        st.session_state.circuit_graphique = streamlit_flow(
-            f"circuit_reference_enseignant_{_slug_composant(tp_reference_enseignant)}",
-            st.session_state.circuit_reference_enseignant,
-            height=650, fit_view=True, show_minimap=True,
-            hide_watermark=True, allow_new_edges=False,
-            enable_node_menu=False, enable_edge_menu=False, enable_pane_menu=False,
-            get_node_on_click=False, get_edge_on_click=False, min_zoom=0.15,
+    st.subheader("4. Simulation du montage")
+
+    if st.button(
+        "▶️ Lancer la simulation",
+        type="primary",
+        use_container_width=True,
+        key="etu_lancer_simulation"
+    ):
+        resultat_cablage = corriger_montage(
+            tp_nom,
+            tp["composants"],
+            st.session_state.liaisons_etudiant
         )
-        st.markdown("**Liste détaillée des connexions de référence**")
-        lignes_reference = []
-        for a, b in TPS[tp_reference_enseignant].get("liaisons", []):
-            lignes_reference.append({"Borne de départ": a, "Borne d'arrivée": b, "Conducteur": _couleur_initiale_fil(a, b)})
-        if lignes_reference:
-            st.dataframe(pd.DataFrame(lignes_reference), use_container_width=True, hide_index=True)
+
+        st.session_state["etu_resultat_simulation"] = {
+            "cablage": resultat_cablage,
+            "branches": []
+        }
+
+        u = 24.0
+        f = 50.0
+        r = 100.0
+
+        if "Graetz" in tp_nom or "Redressement" in tp_nom:
+            v_moy = 0.9 * u
+            i_moy = v_moy / r
+            p_moy = v_moy * i_moy
+
+            st.session_state["etu_resultat_simulation"]["branches"] = [
+                {
+                    "branche": "Transformateur → Pont de Graetz",
+                    "tension": u,
+                    "courant": i_moy,
+                    "puissance": u * i_moy
+                },
+                {
+                    "branche": "Pont de Graetz → Résistance",
+                    "tension": v_moy,
+                    "courant": i_moy,
+                    "puissance": p_moy
+                },
+                {
+                    "branche": "Résistance de charge",
+                    "tension": v_moy,
+                    "courant": i_moy,
+                    "puissance": p_moy
+                }
+            ]
+
+        elif "RC" in tp_nom:
+            tau = r * 100e-6
+            i_initial = u / r
+
+            st.session_state["etu_resultat_simulation"]["branches"] = [
+                {
+                    "branche": "Source → Résistance",
+                    "tension": u,
+                    "courant": i_initial,
+                    "puissance": u * i_initial
+                },
+                {
+                    "branche": "Résistance → Condensateur",
+                    "tension": u,
+                    "courant": i_initial,
+                    "puissance": u * i_initial
+                },
+                {
+                    "branche": "Condensateur",
+                    "tension": u,
+                    "courant": 0.0,
+                    "puissance": 0.0
+                }
+            ]
+
+        elif "Arduino" in tp_nom:
+            i_led = max(0.0, (5.0 - 2.0) / 330.0)
+
+            st.session_state["etu_resultat_simulation"]["branches"] = [
+                {
+                    "branche": "Arduino D5 → Résistance",
+                    "tension": 3.0,
+                    "courant": i_led,
+                    "puissance": 3.0 * i_led
+                },
+                {
+                    "branche": "Résistance → LED",
+                    "tension": 2.0,
+                    "courant": i_led,
+                    "puissance": 2.0 * i_led
+                }
+            ]
+
+        elif "moteur asynchrone" in tp_nom.lower():
+            i_nominal = 8.5
+            couple = 26.0
+            vitesse = 1450.0
+            p_utile = couple * vitesse * 2 * math.pi / 60
+            p_absorbee = p_utile / 0.86
+
+            st.session_state["etu_resultat_simulation"]["branches"] = [
+                {
+                    "branche": "Réseau → Disjoncteur",
+                    "tension": 400.0,
+                    "courant": i_nominal,
+                    "puissance": p_absorbee
+                },
+                {
+                    "branche": "Disjoncteur → Contacteur",
+                    "tension": 400.0,
+                    "courant": i_nominal,
+                    "puissance": p_absorbee
+                },
+                {
+                    "branche": "Contacteur → Relais thermique",
+                    "tension": 400.0,
+                    "courant": i_nominal,
+                    "puissance": p_absorbee
+                },
+                {
+                    "branche": "Relais thermique → Moteur",
+                    "tension": 400.0,
+                    "courant": i_nominal,
+                    "puissance": p_absorbee
+                }
+            ]
+
         else:
-            st.warning("Aucune liaison de référence n'est définie pour ce TP.")
+            i_dc = u / r
+            p_dc = u * i_dc
+
+            st.session_state["etu_resultat_simulation"]["branches"] = [
+                {
+                    "branche": "Source → Charge",
+                    "tension": u,
+                    "courant": i_dc,
+                    "puissance": p_dc
+                },
+                {
+                    "branche": "Charge",
+                    "tension": u,
+                    "courant": i_dc,
+                    "puissance": p_dc
+                }
+            ]
+
+    resultat_simulation = st.session_state.get("etu_resultat_simulation")
+
+    if resultat_simulation is None:
+        st.info("Réalicez le câblage puis lancez la simulation.")
     else:
-        st.error("Le visualiseur graphique nécessite streamlit-flow-component==1.6.1.")
+        resultat_cablage = resultat_simulation["cablage"]
+
+        if resultat_cablage["correct"]:
+            st.success("✅ Câblage conforme au schéma de référence.")
+        else:
+            st.warning("⚠️ Le câblage comporte des différences par rapport au schéma de référence.")
+
+        st.metric("Note indicative du câblage", f"{resultat_cablage['note']:.2f} / 20")
+
+        if resultat_cablage["details"]:
+            st.dataframe(
+                pd.DataFrame(resultat_cablage["details"]),
+                use_container_width=True,
+                hide_index=True
+            )
+
+        st.subheader("Résultats dans les branches du montage")
+
+        if resultat_simulation["branches"]:
+            st.dataframe(
+                pd.DataFrame(resultat_simulation["branches"]),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("Aucun résultat de branche disponible pour ce TP.")
 
     st.divider()
-    st.subheader("📊 Résultats de la session actuelle")
-    if st.session_state.historique:
-        historique = pd.DataFrame(st.session_state.historique)
-        st.dataframe(historique, use_container_width=True, hide_index=True)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Tentatives", len(historique))
-        col2.metric("Note moyenne", f'{historique["Note"].mean():.2f} / 20')
-        col3.metric("Montages réussis", int((historique["Résultat"] == "Réussi").sum()))
-        st.download_button(
-            "⬇️ Exporter les résultats CSV",
-            data=historique.to_csv(index=False).encode("utf-8-sig"),
-            file_name="resultats_tp_etudiants.csv",
-            mime="text/csv",
-        )
+
+    st.subheader("5. Appareils de mesure et emplacement")
+
+    if resultat_simulation is None:
+        st.info("Lancez d'abord la simulation pour afficher les mesures.")
     else:
-        st.info("Aucune tentative enregistrée dans cette session Streamlit.")
+        branches_disponibles = [
+            branche["branche"]
+            for branche in resultat_simulation["branches"]
+        ]
+
+        appareil_mesure = st.selectbox(
+            "Appareil de mesure",
+            [
+                "Voltmètre",
+                "Ampèremètre",
+                "Oscilloscope",
+                "Wattmètre",
+                "Tachymètre",
+                "Multimètre"
+            ],
+            key="etu_appareil_mesure"
+        )
+
+        emplacement_mesure = st.selectbox(
+            "Emplacement de l'appareil",
+            branches_disponibles,
+            key="etu_emplacement_mesure"
+        )
+
+        branche_mesuree = next(
+            (
+                branche
+                for branche in resultat_simulation["branches"]
+                if branche["branche"] == emplacement_mesure
+            ),
+            None
+        )
+
+        if branche_mesuree is None:
+            st.warning("Sélectionnez une branche valide.")
+        else:
+            col_mesure1, col_mesure2, col_mesure3 = st.columns(3)
+
+            if appareil_mesure == "Voltmètre":
+                valeur_mesuree = branche_mesuree["tension"]
+                unite_mesuree = "V"
+                calibre_mesure = "20 V" if abs(valeur_mesuree) <= 20 else "200 V"
+                depassement = abs(valeur_mesuree) > 200
+
+            elif appareil_mesure == "Ampèremètre":
+                valeur_mesuree = branche_mesuree["courant"]
+                unite_mesuree = "A"
+                calibre_mesure = "2 A" if abs(valeur_mesuree) <= 2 else "10 A"
+                depassement = abs(valeur_mesuree) > 10
+
+            elif appareil_mesure == "Wattmètre":
+                valeur_mesuree = branche_mesuree["puissance"]
+                unite_mesuree = "W"
+                calibre_mesure = "Automatique"
+                depassement = False
+
+            elif appareil_mesure == "Tachymètre":
+                valeur_mesuree = 1450.0 if "moteur" in tp_nom.lower() else 0.0
+                unite_mesuree = "tr/min"
+                calibre_mesure = "Automatique"
+                depassement = False
+
+            elif appareil_mesure == "Multimètre":
+                valeur_mesuree = branche_mesuree["tension"]
+                unite_mesuree = "V"
+                calibre_mesure = "Automatique"
+                depassement = False
+
+            else:
+                valeur_mesuree = branche_mesuree["tension"]
+                unite_mesuree = "V"
+                calibre_mesure = "Automatique"
+                depassement = False
+
+            with col_mesure1:
+                st.markdown(f"**{appareil_mesure}**")
+                st.caption(f"Emplacement : {emplacement_mesure}")
+
+            with col_mesure2:
+                if depassement:
+                    st.error("OL — dépassement de calibre")
+                else:
+                    st.metric(
+                        "Valeur mesurée",
+                        f"{valeur_mesuree:.3g} {unite_mesuree}"
+                    )
+
+            with col_mesure3:
+                st.caption(f"Calibre : {calibre_mesure}")
+
+            if appareil_mesure == "Oscilloscope":
+                st.markdown("**Visualisation du signal**")
+
+                if "Graetz" in tp_nom or "Redressement" in tp_nom:
+                    t_osc = np.linspace(0, 2 / f, 1200)
+                    signal_osc = u * np.sqrt(2) * np.sin(2 * math.pi * f * t_osc)
+                    titre_osc = "Tension alternative d'entrée"
+
+                elif "RC" in tp_nom:
+                    tau = r * 100e-6
+                    t_osc = np.linspace(0, 5 * tau, 800)
+                    signal_osc = u * (1 - np.exp(-t_osc / tau))
+                    titre_osc = "Charge du condensateur"
+
+                elif "moteur asynchrone" in tp_nom.lower():
+                    t_osc = np.linspace(0, 0.04, 1000)
+                    signal_osc = 325 * np.sin(2 * math.pi * 50 * t_osc)
+                    titre_osc = "Tension du réseau triphasé"
+
+                else:
+                    t_osc = np.linspace(0, 0.1, 1000)
+                    signal_osc = np.full_like(t_osc, u)
+                    titre_osc = "Tension continue"
+
+                fig_osc = go.Figure()
+                fig_osc.add_trace(
+                    go.Scatter(
+                        x=t_osc * 1000,
+                        y=signal_osc,
+                        mode="lines",
+                        name=titre_osc,
+                        line=dict(color="#2563eb", width=2)
+                    )
+                )
+                fig_osc.update_layout(
+                    title=f"Oscilloscope — {titre_osc}",
+                    xaxis_title="Temps (ms)",
+                    yaxis_title="Tension (V)",
+                    height=420,
+                    margin=dict(l=10, r=10, t=45, b=10)
+                )
+                st.plotly_chart(fig_osc, use_container_width=True, key="etu_oscilloscope")
+
+            elif appareil_mesure == "Tachymètre":
+                if "moteur" in tp_nom.lower():
+                    st.plotly_chart(
+                        creer_schema_tp(tp_nom),
+                        use_container_width=True,
+                        key="etu_schema_tachymetre"
+                    )
+                else:
+                    st.info("Le tachymètre est disponible uniquement pour les TP moteur.")
+
+            else:
+                st.info(
+                    "La valeur affichée correspond à la branche sélectionnée "
+                    "dans la simulation du montage."
+                )
+
+    st.divider()
+
+    st.subheader("6. Schéma de référence du TP")
+    st.caption(
+        "Le schéma sert de repère pédagogique. Il ne révèle pas automatiquement "
+        "le corrigé détaillé du câblage."
+    )
+
+    st.plotly_chart(
+        creer_schema_tp(tp_nom),
+        use_container_width=True,
+        key="etu_schema_reference"
+    )
 
 elif espace == "ℹ️ À propos":
     st.title("ℹ️ À propos de la plateforme")
