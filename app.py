@@ -593,6 +593,39 @@ def corriger_montage(tp_nom, composants_choisis, liaisons_saisies):
 
 
 
+
+def _infos_borne_arete(state, edge):
+    """Retourne (id_composant_source, borne_source, id_composant_cible, borne_cible)."""
+    nodes = {n.id: n for n in state.nodes}
+    a, b = nodes.get(edge.source), nodes.get(edge.target)
+    if a is None or b is None:
+        return None
+    da, db = a.data or {}, b.data or {}
+    if da.get("node_role") == "borne" and db.get("node_role") == "borne":
+        return da.get("component_id"), da.get("terminal"), db.get("component_id"), db.get("terminal")
+    # Compatibilité avec les anciens canevas où le fil reliait directement les blocs.
+    ancienne_paire = st.session_state.get("bornes_par_arete", {}).get(edge.id)
+    if ancienne_paire and len(ancienne_paire) == 2:
+        return edge.source, ancienne_paire[0], edge.target, ancienne_paire[1]
+    return edge.source, None, edge.target, None
+
+
+def _paires_bornes_graphiques(state):
+    """Construit automatiquement les bornes de chaque fil à partir des broches reliées."""
+    nodes = {n.id: n for n in state.nodes}
+    resultat = {}
+    for edge in state.edges:
+        info = _infos_borne_arete(state, edge)
+        if not info:
+            continue
+        ca, ba, cb, bb = info
+        na, nb = nodes.get(ca), nodes.get(cb)
+        if na and nb and ba and bb:
+            resultat[edge.id] = (ba, bb)
+        else:
+            resultat[edge.id] = st.session_state.get("bornes_par_arete", {}).get(edge.id)
+    return resultat
+
 def initialiser_circuit_graphique():
     if st.session_state.circuit_graphique is None:
         st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
@@ -606,57 +639,51 @@ def ajouter_composant_graphique(nom_composant):
         st.error("Composant introuvable dans la bibliothèque.")
         return
     node_id = f"cmp_{uuid4().hex[:10]}"
-    position = (80 + (len(state.nodes) % 3) * 260, 60 + (len(state.nodes) // 3) * 180)
-    numero = 1 + sum(1 for n in state.nodes if getattr(n, "data", {}).get("component") == nom_composant)
+    numero = 1 + sum(1 for n in state.nodes if n.data.get("node_role") == "composant" and n.data.get("component") == nom_composant)
     instance = f"{nom_composant} #{numero}"
+    # Disposition en grille : la carte est à gauche, ses broches individuelles à droite.
+    nb_composants = sum(1 for n in state.nodes if n.data.get("node_role") == "composant")
+    x0 = 80 + (nb_composants % 2) * 650
+    y0 = 60 + (nb_composants // 2) * 620
     pastilles = "".join(
-        f"<span style='display:inline-block;margin:3px 3px 0 0;padding:3px 6px;"
-        f"border:1px solid #60a5fa;border-radius:6px;background:#eff6ff;"
-        f"font-size:10px;color:#1e3a8a'>{borne}</span>"
+        f"<span style='display:inline-block;margin:3px;padding:3px 6px;border:1px solid #60a5fa;"
+        f"border-radius:6px;background:#eff6ff;font-size:10px;color:#1e3a8a'>{html_escape(borne)}</span>"
         for borne in bornes
     )
     contenu = (
-        f"<div style='padding:9px;min-width:190px;max-width:260px'>"
-        f"<div style='font-weight:700;font-size:14px;color:#0f172a'>⚡ {instance}</div>"
+        f"<div style='padding:9px;min-width:190px;max-width:230px'>"
+        f"<div style='font-weight:700;font-size:14px;color:#0f172a'>⚡ {html_escape(instance)}</div>"
         f"<div style='font-size:12px;color:#1d4ed8;margin-top:5px'>Symbole : {html_escape(SYMBOLES_ELECTRIQUES.get(nom_composant, nom_composant))}</div>"
-        f"<div style='font-size:10px;color:#475569;margin-top:6px'>BORNES ÉLECTRIQUES</div>"
+        f"<div style='font-size:10px;color:#475569;margin-top:6px'>BROCHES INDÉPENDANTES</div>"
         f"<div style='margin-top:2px;line-height:1.9'>{pastilles}</div></div>"
     )
-    # Configuration par défaut des nœuds du laboratoire :
-    # - type "default" : chaque appareil possède une entrée et une sortie ;
-    # - sortie à droite et entrée à gauche : câblage lisible de gauche à droite ;
-    # - déplacement, connexion et suppression autorisés ;
-    # - largeur visuelle uniforme pour laisser apparaître le nom et les bornes.
-    donnees_noeud = {
-        "content": contenu,
-        "component": nom_composant,
-        "instance": instance,
-        "terminals": bornes,
-        "node_width": 230,
-        "node_role": "composant_electrique",
-    }
-    node = StreamlitFlowNode(
-        id=node_id,
-        pos=position,
-        data=donnees_noeud,
-        node_type="default",
-        source_position="right",
-        target_position="left",
-        draggable=True,
-        connectable=True,
-        deletable=True,
-        selectable=True,
-        style={
-            "width": "230px",
-            "minWidth": "230px",
-            "border": "1px solid #60a5fa",
-            "borderRadius": "10px",
-            "background": "#ffffff",
-            "padding": "0px",
-            "boxShadow": "0 2px 8px rgba(15, 23, 42, 0.10)",
-        },
+    card = StreamlitFlowNode(
+        id=node_id, pos=(x0, y0), data={"content": contenu, "component": nom_composant,
+        "instance": instance, "terminals": bornes, "node_role": "composant"},
+        node_type="default", source_position="right", target_position="left",
+        draggable=True, connectable=False, deletable=True, selectable=True,
+        style={"width": "245px", "border": "1px solid #60a5fa", "borderRadius": "10px",
+               "background": "#ffffff", "padding": "0px", "boxShadow": "0 2px 8px rgba(15,23,42,.10)"},
     )
-    state.nodes.append(node)
+    state.nodes.append(card)
+    # Chaque broche est un vrai nœud React Flow indépendant, donc chaque fil part
+    # précisément de la borne sélectionnée sur le canevas.
+    for i, borne in enumerate(bornes):
+        pin_id = f"pin_{uuid4().hex[:10]}"
+        pin_html = (
+            f"<div style='padding:5px 8px;min-width:112px;text-align:center;background:#eff6ff;"
+            f"border:1px solid #2563eb;border-radius:7px;color:#12356b;font-size:12px;font-weight:700'>"
+            f"● {html_escape(borne)}</div>"
+        )
+        pin = StreamlitFlowNode(
+            id=pin_id, pos=(x0 + 285, y0 + i * 54),
+            data={"content": pin_html, "component": nom_composant, "instance": instance,
+                  "terminal": borne, "component_id": node_id, "node_role": "borne", "terminals": [borne]},
+            node_type="default", source_position="right", target_position="left",
+            draggable=True, connectable=True, deletable=True, selectable=True,
+            style={"width": "125px", "minWidth": "125px", "border": "0px", "background": "transparent", "padding": "0px"},
+        )
+        state.nodes.append(pin)
     st.session_state.circuit_graphique = state
 
 
@@ -697,73 +724,52 @@ def _couleur_initiale_fil(borne_a, borne_b):
 
 
 def afficher_schema_cablage_colorie(state, bornes_par_arete, couleurs_par_arete):
-    """Affiche une vue pédagogique des fils avec leur couleur sélectionnée."""
+    """Dessine les liaisons en reliant visuellement les composants via leurs broches."""
     fig = go.Figure()
     nodes = {n.id: n for n in state.nodes}
-    if not nodes:
+    composants = [n for n in state.nodes if n.data.get("node_role") == "composant"]
+    if not composants:
         st.info("Ajoutez des composants pour afficher le schéma de câblage coloré.")
         return
     positions = {}
     for node in state.nodes:
         pos = getattr(node, "pos", getattr(node, "position", (0, 0)))
         try:
-            if isinstance(pos, dict):
-                x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
-            else:
-                x, y = float(pos[0]), float(pos[1])
-        except Exception:
-            x, y = 0.0, 0.0
+            if isinstance(pos, dict): x, y = float(pos.get("x", 0)), float(pos.get("y", 0))
+            else: x, y = float(pos[0]), float(pos[1])
+        except Exception: x, y = 0.0, 0.0
         positions[node.id] = (x, y)
-
-    # Tracer les conducteurs entre les centres des composants.
     for edge in state.edges:
-        a, b = positions.get(edge.source), positions.get(edge.target)
-        if not a or not b:
-            continue
-        choix = bornes_par_arete.get(edge.id, ("?", "?"))
-        label = couleurs_par_arete.get(edge.id) or _couleur_initiale_fil(*choix)
+        info = _infos_borne_arete(state, edge)
+        if not info: continue
+        ca, ba, cb, bb = info
+        na, nb = nodes.get(ca), nodes.get(cb)
+        if not na or not nb: continue
+        x1, y1 = positions.get(ca, (0, 0)); x2, y2 = positions.get(cb, (0, 0))
+        label = couleurs_par_arete.get(edge.id) or _couleur_initiale_fil(ba or "", bb or "")
         config = COULEURS_FILS.get(label, COULEURS_FILS["Autre conducteur — jaune"])
-        x1, y1 = a
-        x2, y2 = b
-        # Une légère courbure visuelle évite de confondre plusieurs fils superposés.
-        decalage = (len(str(edge.id)) % 5 - 2) * 9
-        xm, ym = (x1 + x2) / 2, (y1 + y2) / 2 + decalage
-        if config["type"] == "terre":
-            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
-                line=dict(color="#159447", width=8), hoverinfo="skip", showlegend=False))
-            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
-                line=dict(color="#F4D03F", width=3, dash="dash"),
-                name="PE vert/jaune", hovertemplate="PE vert/jaune<extra></extra>"))
-        else:
-            fig.add_trace(go.Scatter(x=[x1, xm, x2], y=[y1, ym, y2], mode="lines",
-                line=dict(color=config["hex"], width=6), name=label,
-                hovertemplate=f"{html_escape(str(choix[0]))} ↔ {html_escape(str(choix[1]))}<br>{html_escape(label)}<extra></extra>"))
-        fig.add_trace(go.Scatter(x=[x1, x2], y=[y1, y2], mode="markers",
-            marker=dict(size=8, color=config["hex"], line=dict(color="white", width=1)),
-            showlegend=False, hoverinfo="skip"))
-
-    # Les blocs sont repérés par leur désignation et leurs bornes.
+        hover = f"{na.data.get('instance')}.{ba} ↔ {nb.data.get('instance')}.{bb}"
+        fig.add_trace(go.Scatter(x=[x1, (x1+x2)/2, x2], y=[y1, (y1+y2)/2, y2], mode="lines",
+            line=dict(color=config["hex"], width=5), name=label, hovertemplate=f"{html_escape(hover)}<br>{html_escape(label)}<extra></extra>"))
     fig.add_trace(go.Scatter(
-        x=[positions[n.id][0] for n in state.nodes],
-        y=[positions[n.id][1] for n in state.nodes],
-        mode="markers+text",
-        text=[n.data.get("instance", n.data.get("component", n.id)) for n in state.nodes],
-        textposition="top center",
-        marker=dict(symbol="square", size=25, color="#E8F1FA", line=dict(color="#1D4ED8", width=2)),
-        name="Appareils", hovertext=["Bornes : " + ", ".join(n.data.get("terminals", [])) for n in state.nodes],
+        x=[positions[n.id][0] for n in composants], y=[positions[n.id][1] for n in composants],
+        mode="markers+text", text=[n.data.get("instance", n.data.get("component", n.id)) for n in composants],
+        textposition="top center", marker=dict(symbol="square", size=28, color="#E8F1FA", line=dict(color="#1D4ED8", width=2)),
+        name="Appareils", hovertext=["Bornes : " + ", ".join(n.data.get("terminals", [])) for n in composants],
         hovertemplate="%{text}<br>%{hovertext}<extra></extra>"))
-    fig.update_layout(title="Schéma de câblage — conducteurs colorés", height=480,
+    fig.update_layout(title="Schéma de câblage — fils reliés aux broches", height=500,
         xaxis=dict(visible=False), yaxis=dict(visible=False, autorange="reversed"),
         showlegend=True, legend=dict(orientation="h", y=-0.15),
-        margin=dict(l=20, r=20, t=55, b=65), plot_bgcolor="#FAFCFF",
-        paper_bgcolor="rgba(0,0,0,0)")
+        margin=dict(l=20, r=20, t=55, b=65), plot_bgcolor="#FAFCFF", paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True, key="schema_cablage_colorie")
+
 
 def analyser_circuit_graphique(tp_nom, state, bornes_par_arete):
     reference = TPS[tp_nom]
     nodes = {n.id: n for n in state.nodes}
     composants_presents = {
-        n.data.get("component") for n in state.nodes if getattr(n, "data", None)
+        n.data.get("component") for n in state.nodes
+        if getattr(n, "data", None) and n.data.get("node_role") == "composant"
     }
     attendus_composants = set(reference["composants"])
     manquants = sorted(attendus_composants - composants_presents)
@@ -776,13 +782,16 @@ def analyser_circuit_graphique(tp_nom, state, bornes_par_arete):
         if not choix:
             aretes_sans_bornes.append(edge.id)
             continue
-        depart, arrivee = choix
-        n1, n2 = nodes.get(edge.source), nodes.get(edge.target)
-        if n1 is None or n2 is None:
+        info = _infos_borne_arete(state, edge)
+        if not info:
+            continue
+        comp_a, borne_a, comp_b, borne_b = info
+        n1, n2 = nodes.get(comp_a), nodes.get(comp_b)
+        if n1 is None or n2 is None or not borne_a or not borne_b:
             continue
         liaisons_reelles.add(normaliser_liaison(
-            f"{n1.data.get('component')}.{depart}",
-            f"{n2.data.get('component')}.{arrivee}"
+            f"{n1.data.get('component')}.{borne_a}",
+            f"{n2.data.get('component')}.{borne_b}"
         ))
 
     liaisons_attendues = {normaliser_liaison(a, b) for a, b in reference["liaisons"]}
@@ -809,147 +818,167 @@ def analyser_circuit_graphique(tp_nom, state, bornes_par_arete):
 
 # ---------------------------------------------------------------------
 # SOLVEUR DC : ANALYSE NODALE MODIFIÉE (MNA)
-# Modèle limité aux résistances et sources indépendantes DC idéales.
-# Les fils idéaux fusionnent les bornes en un même nœud électrique.
+# Modèles permanents : R, sources, diodes à seuil, bobines, enroulements moteurs
+# simplifiés et contacts commutés. Les fils idéaux fusionnent les broches connectées.
 # ---------------------------------------------------------------------
 def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
-    """Résout un réseau R/V/I en DC. Retourne tensions et courants orientés + vers -."""
-    nodes = {n.id: n for n in state.nodes}
-    parent = {}
+    """Solveur MNA DC permanent : R, sources, bobines, moteurs simplifiés, contacts et diodes idéalisées.
 
+    Condensateur : circuit ouvert en régime permanent DC.
+    Inductance : court-circuit idéal en régime permanent DC (sa résistance série peut être renseignée).
+    Moteur : trois enroulements résistifs indépendants ; pas de FEM de rotation ni de dynamique mécanique.
+    Diode : modèle à seuil constant (0,7 V par défaut), commutation itérative.
+    """
+    nodes = {n.id: n for n in state.nodes}
+    composants = {n.id: n for n in state.nodes if n.data.get("node_role") == "composant"}
+    parent = {}
     def find(x):
         parent.setdefault(x, x)
-        if parent[x] != x:
-            parent[x] = find(parent[x])
+        if parent[x] != x: parent[x] = find(parent[x])
         return parent[x]
-
     def union(a, b):
         ra, rb = find(a), find(b)
-        if ra != rb:
-            parent[rb] = ra
+        if ra != rb: parent[rb] = ra
+    def term(cid, borne): return f"{cid}::{borne}"
 
-    for node in state.nodes:
-        for terminal in node.data.get("terminals", []):
-            find(f"{node.id}::{terminal}")
-
+    for cid, node in composants.items():
+        for borne in node.data.get("terminals", []): find(term(cid, borne))
     for edge in state.edges:
-        selected = bornes_par_arete.get(edge.id)
-        if not selected:
-            continue
-        a, b = selected
-        if edge.source in nodes and edge.target in nodes:
-            union(f"{edge.source}::{a}", f"{edge.target}::{b}")
+        info = _infos_borne_arete(state, edge)
+        if info:
+            ca, ba, cb, bb = info
+            if ca in composants and cb in composants and ba and bb:
+                union(term(ca, ba), term(cb, bb))
 
-    net_labels = {}
-    for node in state.nodes:
-        for terminal in node.data.get("terminals", []):
-            key = f"{node.id}::{terminal}"
-            root = find(key)
-            net_labels.setdefault(root, f"N{len(net_labels) + 1}")
-
-    elements = []
-    for node in state.nodes:
+    # Les liaisons internes des composants idéalisés sont des courts-circuits fermés.
+    for cid, node in composants.items():
         typ = node.data.get("component")
-        if typ not in ("Résistance", "Résistance de puissance", "Source de tension DC", "Source de courant DC"):
-            continue
-        terminals = node.data.get("terminals", [])
-        if len(terminals) < 2:
-            continue
-        nplus = net_labels[find(f"{node.id}::{terminals[0]}")]
-        nminus = net_labels[find(f"{node.id}::{terminals[1]}")]
-        values = parametres.get(node.id, {})
-        elements.append({
-            "id": node.id, "nom": node.data.get("instance", typ), "type": typ,
-            "plus": nplus, "minus": nminus,
-            "valeur": float(values.get("value", 0.0)),
-        })
+        par = parametres.get(cid, {})
+        if typ == "Bobine" and par.get("modele_bobine", "résistance DC") == "inductance idéale (court-circuit DC)":
+            union(term(cid, "A"), term(cid, "B"))
+        if typ == "Contacteur KM1" and par.get("contacts_fermes", False):
+            for a, b in (("L1", "T1"), ("L2", "T2"), ("L3", "T3"), ("13", "14")):
+                if a in node.data.get("terminals", []) and b in node.data.get("terminals", []): union(term(cid,a), term(cid,b))
+        if typ == "Relais auxiliaire" and par.get("contacts_no_fermes", False):
+            for a,b in (("13","14"),("21","22")):
+                if a in node.data.get("terminals", []) and b in node.data.get("terminals", []): union(term(cid,a), term(cid,b))
+        if typ == "Relais thermique" and par.get("contact_95_96_ferme", True):
+            if "95" in node.data.get("terminals", []) and "96" in node.data.get("terminals", []): union(term(cid,"95"), term(cid,"96"))
+        if typ in ("Bouton poussoir NO", "Arrêt d'urgence NF", "Bouton poussoir NF", "Fusible", "Disjoncteur tripolaire"):
+            ferme = bool(par.get("ferme", typ in ("Arrêt d'urgence NF", "Bouton poussoir NF", "Fusible")))
+            bornes = node.data.get("terminals", [])
+            if ferme:
+                if typ == "Disjoncteur tripolaire":
+                    for a,b in (("L1","T1"),("L2","T2"),("L3","T3")):
+                        if a in bornes and b in bornes: union(term(cid,a),term(cid,b))
+                elif len(bornes)>=2: union(term(cid,bornes[0]),term(cid,bornes[1]))
 
-    nets = sorted(set(net_labels.values()))
-    if noeud_masse not in nets:
-        raise ValueError("Le nœud de référence choisi n'existe plus.")
-    if not elements:
-        raise ValueError("Ajoutez au moins une résistance ou une source DC prise en charge.")
+    roots, terminal_net = {}, {}
+    for cid,node in composants.items():
+        for borne in node.data.get("terminals", []):
+            r=find(term(cid,borne)); roots.setdefault(r,f"N{len(roots)+1}")
+            terminal_net[(cid,borne)] = roots[r]
 
-    unknown_nets = [n for n in nets if n != noeud_masse]
-    index = {net: i for i, net in enumerate(unknown_nets)}
-    voltage_sources = [e for e in elements if e["type"] == "Source de tension DC"]
-    size = len(unknown_nets) + len(voltage_sources)
-    if size == 0:
-        raise ValueError("Le circuit ne contient aucun nœud électrique calculable.")
-    matrix = np.zeros((size, size), dtype=float)
-    rhs = np.zeros(size, dtype=float)
+    branches=[]; voltage_sources=[]; diodes=[]; passive_open=[]
+    def add_r(cid, label, a, b, resistance, kind):
+        if a not in node_terms(cid) or b not in node_terms(cid): return
+        na,nb=terminal_net[(cid,a)],terminal_net[(cid,b)]
+        if na==nb: raise ValueError(f"{label} est court-circuité.")
+        if resistance <= 0: raise ValueError(f"La résistance de {label} doit être positive.")
+        branches.append({"id":cid,"nom":label,"type":kind,"a":na,"b":nb,"R":float(resistance)})
+    def node_terms(cid): return composants[cid].data.get("terminals", [])
 
-    def stamp_conductance(a, b, g):
-        if a != noeud_masse:
-            ia = index[a]
-            matrix[ia, ia] += g
-        if b != noeud_masse:
-            ib = index[b]
-            matrix[ib, ib] += g
-        if a != noeud_masse and b != noeud_masse:
-            ia, ib = index[a], index[b]
-            matrix[ia, ib] -= g
-            matrix[ib, ia] -= g
+    for cid,node in composants.items():
+        typ=node.data.get("component"); ident=node.data.get("instance",typ); par=parametres.get(cid,{})
+        bornes=node.data.get("terminals",[])
+        if typ in ("Résistance","Résistance de puissance"):
+            add_r(cid,ident,bornes[0],bornes[1],float(par.get("value",100.0)),"Résistance")
+        elif typ == "Source de tension DC":
+            voltage_sources.append({"id":cid,"nom":ident,"type":typ,"a":terminal_net[(cid,bornes[0])],"b":terminal_net[(cid,bornes[1])],"value":float(par.get("value",12.0))})
+        elif typ == "Source de courant DC":
+            branches.append({"id":cid,"nom":ident,"type":typ,"a":terminal_net[(cid,bornes[0])],"b":terminal_net[(cid,bornes[1])],"I":float(par.get("value",0.1))})
+        elif typ == "Bobine":
+            if par.get("modele_bobine", "résistance DC") == "inductance idéale (court-circuit DC)":
+                passive_open.append({"id":cid,"nom":ident,"type":"Bobine (court-circuit DC)","a":terminal_net[(cid,"A")],"b":terminal_net[(cid,"B")]})
+            else: add_r(cid,ident,"A","B",float(par.get("value",20.0)),"Bobine — résistance cuivre")
+        elif typ == "Moteur asynchrone triphasé":
+            rphase=float(par.get("value",12.0))
+            for a,b in (("U1","U2"),("V1","V2"),("W1","W2")):
+                add_r(cid,f"{ident} — enroulement {a[0]}",a,b,rphase,"Enroulement moteur (modèle R DC)")
+        elif typ == "Diode de puissance":
+            diodes.append({"id":cid,"nom":ident,"a":terminal_net[(cid,"Anode")],"b":terminal_net[(cid,"Cathode")],"vf":float(par.get("vf",0.7)),"on":False})
+        elif typ == "Condensateur":
+            passive_open.append({"id":cid,"nom":ident,"type":"Condensateur (ouvert en DC permanent)","a":terminal_net[(cid,"A")],"b":terminal_net[(cid,"B")]})
+        elif typ == "Contacteur KM1":
+            # Bobine du contacteur : résistance cuivre équivalente entre A1 et A2.
+            add_r(cid, f"{ident} — bobine A1/A2", "A1", "A2", float(par.get("coil_r",1000.0)), "Bobine de contacteur")
 
-    for e in elements:
-        a, b, value = e["plus"], e["minus"], e["valeur"]
-        if a == b:
-            raise ValueError(f"{e['nom']} est court-circuité : ses deux bornes sont sur le même nœud.")
-        if e["type"] in ("Résistance", "Résistance de puissance"):
-            if value <= 0:
-                raise ValueError(f"La valeur de {e['nom']} doit être supérieure à 0 Ω.")
-            stamp_conductance(a, b, 1.0 / value)
-        elif e["type"] == "Source de courant DC":
-            # Courant positif orienté de la borne + vers la borne -.
-            if a != noeud_masse:
-                rhs[index[a]] -= value
-            if b != noeud_masse:
-                rhs[index[b]] += value
+    # Ne garder que les nœuds participant au réseau conducteur, pour ne pas rendre
+    # singulier un condensateur isolé en circuit ouvert.
+    active_nets=set()
+    for e in branches+voltage_sources+diodes:
+        active_nets.update((e["a"],e["b"]))
+    nets=sorted(active_nets)
+    if noeud_masse not in nets: raise ValueError("La masse choisie n'appartient pas au réseau simulable. Connectez-la à une source ou à une charge.")
+    if not (branches or voltage_sources or diodes): raise ValueError("Aucun composant conducteur simulable n'est raccordé. Un condensateur seul est ouvert en régime permanent DC.")
 
-    for k, e in enumerate(voltage_sources):
-        row = len(unknown_nets) + k
-        a, b = e["plus"], e["minus"]
-        if a != noeud_masse:
-            ia = index[a]
-            matrix[ia, row] += 1.0
-            matrix[row, ia] += 1.0
-        if b != noeud_masse:
-            ib = index[b]
-            matrix[ib, row] -= 1.0
-            matrix[row, ib] -= 1.0
-        rhs[row] = e["valeur"]
+    def solve_once():
+        unknown=[n for n in nets if n!=noeud_masse]; idx={n:i for i,n in enumerate(unknown)}
+        active=[d for d in diodes if d["on"]]
+        vs=voltage_sources + [{"id":d["id"],"nom":d["nom"],"type":"Diode (seuil direct)","a":d["a"],"b":d["b"],"value":d["vf"]} for d in active]
+        size=len(unknown)+len(vs); mat=np.zeros((size,size)); rhs=np.zeros(size)
+        def stamp_g(a,b,g):
+            if a!=noeud_masse: mat[idx[a],idx[a]]+=g
+            if b!=noeud_masse: mat[idx[b],idx[b]]+=g
+            if a!=noeud_masse and b!=noeud_masse:
+                ia,ib=idx[a],idx[b]; mat[ia,ib]-=g; mat[ib,ia]-=g
+        for d in diodes:
+            if not d["on"]:
+                # Résistance de fuite très élevée : évite une matrice singulière
+                # lorsqu'une diode bloquée isole un nœud du réseau.
+                stamp_g(d["a"], d["b"], 1e-9)
+        for e in branches:
+            if e["type"]=="Source de courant DC":
+                if e["a"]!=noeud_masse: rhs[idx[e["a"]]]-=e["I"]
+                if e["b"]!=noeud_masse: rhs[idx[e["b"]]]+=e["I"]
+            else: stamp_g(e["a"],e["b"],1.0/e["R"])
+        for k,e in enumerate(vs):
+            row=len(unknown)+k; a,b=e["a"],e["b"]
+            if a!=noeud_masse: mat[idx[a],row]+=1; mat[row,idx[a]]+=1
+            if b!=noeud_masse: mat[idx[b],row]-=1; mat[row,idx[b]]-=1
+            rhs[row]=e["value"]
+        try: sol=np.linalg.solve(mat,rhs)
+        except np.linalg.LinAlgError as exc: raise ValueError("Réseau singulier : nœud flottant, circuit ouvert ou sources idéales incompatibles. Vérifiez les connexions et la masse.") from exc
+        volts={noeud_masse:0.0}; volts.update({n:float(sol[i]) for n,i in idx.items()})
+        currents={e["id"]:float(sol[len(unknown)+k]) for k,e in enumerate(vs)}
+        return volts,currents
 
-    try:
-        solution = np.linalg.solve(matrix, rhs)
-    except np.linalg.LinAlgError as exc:
-        raise ValueError("Circuit singulier : vérifiez les fils, la masse, les sources et les chemins résistifs (nœud flottant ou source idéale en conflit).") from exc
+    for _ in range(20):
+        volts, currents_vs=solve_once(); changed=False
+        for d in diodes:
+            vd=volts.get(d["a"],0.0)-volts.get(d["b"],0.0)
+            current=currents_vs.get(d["id"],0.0)
+            new_on=(vd >= d["vf"]-1e-7) if not d["on"] else (current >= -1e-8)
+            if new_on != d["on"]: d["on"]=new_on; changed=True
+        if not changed: break
+    volts, currents_vs=solve_once()
 
-    tensions = {noeud_masse: 0.0}
-    for net, i in index.items():
-        tensions[net] = float(solution[i])
-    courants_sources_tension = {
-        e["id"]: float(solution[len(unknown_nets) + k])
-        for k, e in enumerate(voltage_sources)
-    }
-    rows = []
-    for e in elements:
-        va, vb = tensions[e["plus"]], tensions[e["minus"]]
-        if e["type"] in ("Résistance", "Résistance de puissance"):
-            courant = (va - vb) / e["valeur"]
-            puissance = (va - vb) * courant
-        elif e["type"] == "Source de courant DC":
-            courant = e["valeur"]
-            puissance = (va - vb) * courant
-        else:
-            courant = courants_sources_tension[e["id"]]
-            puissance = (va - vb) * courant
-        rows.append({
-            "Composant": e["nom"], "Type": e["type"],
-            "Nœud +": e["plus"], "Nœud -": e["minus"],
-            "Tension (V)": va - vb, "Courant (+ vers -) (A)": courant,
-            "Puissance absorbée (W)": puissance,
-        })
-    return tensions, pd.DataFrame(rows)
+    rows=[]
+    for e in branches:
+        va,vb=volts.get(e["a"],0.0),volts.get(e["b"],0.0)
+        if e["type"]=="Source de courant DC": i=e["I"]; typ=e["type"]
+        else: i=(va-vb)/e["R"]; typ=e["type"]
+        rows.append({"Composant":e["nom"],"Modèle":typ,"Nœud +":e["a"],"Nœud -":e["b"],"Tension (V)":va-vb,"Courant (+ vers -) (A)":i,"Puissance absorbée (W)":(va-vb)*i})
+    for e in voltage_sources:
+        va,vb=volts.get(e["a"],0.0),volts.get(e["b"],0.0); i=currents_vs.get(e["id"],0.0)
+        rows.append({"Composant":e["nom"],"Modèle":e["type"],"Nœud +":e["a"],"Nœud -":e["b"],"Tension (V)":va-vb,"Courant (+ vers -) (A)":i,"Puissance absorbée (W)":(va-vb)*i})
+    for d in diodes:
+        va,vb=volts.get(d["a"],0.0),volts.get(d["b"],0.0); i=currents_vs.get(d["id"],0.0) if d["on"] else 0.0
+        rows.append({"Composant":d["nom"],"Modèle":"Diode passante" if d["on"] else "Diode bloquée","Nœud +":d["a"],"Nœud -":d["b"],"Tension (V)":va-vb,"Courant (+ vers -) (A)":i,"Puissance absorbée (W)":(va-vb)*i})
+    for e in passive_open:
+        va,vb=volts.get(e["a"],float("nan")),volts.get(e["b"],float("nan"))
+        rows.append({"Composant":e["nom"],"Modèle":e["type"],"Nœud +":e["a"],"Nœud -":e["b"],"Tension (V)":va-vb if np.isfinite(va) and np.isfinite(vb) else float("nan"),"Courant (+ vers -) (A)":0.0,"Puissance absorbée (W)":0.0})
+    return volts, pd.DataFrame(rows)
 
 
 
@@ -1203,16 +1232,13 @@ elif espace == "🧩 Éditeur graphique de circuits":
                 "- **Source Position** : `Right` (sortie à droite).\\n"
                 "- **Target Position** : `Left` (entrée à gauche).\\n"
                 "- **Draggable / Connectable / Deletable** : activés.\\n\\n"
-                "Ces réglages organisent le dessin et les connexions graphiques. "
-                "Le choix des bornes électriques et les contrôles de câblage restent "
-                "effectués dans les réglages de chaque liaison."
+                "Chaque broche affichée est un nœud connectable distinct : le fil mémorise "
+                "automatiquement l'identifiant de la borne de départ et celui de la borne d'arrivée."
             )
         st.caption(
-            "Configuration des nœuds : largeur 230 px, type standard avec entrée à gauche "
-            "et sortie à droite. Déplacez les appareils à la souris, reliez la sortie droite "
-            "d'un appareil à l'entrée gauche d'un autre, puis choisissez les bornes réelles "
-            "et la couleur du conducteur. Le menu contextuel permet de modifier ou supprimer "
-            "un nœud ; la suppression est activée."
+            "Chaque borne est un point graphique indépendant. Reliez directement une broche "
+            "bleue à une autre broche bleue ; le nom des deux bornes est détecté automatiquement. "
+            "Les cartes de composants et les broches peuvent être déplacées séparément."
         )
         st.session_state.circuit_graphique = streamlit_flow(
             "atelier_electrique_graphique",
@@ -1229,51 +1255,31 @@ elif espace == "🧩 Éditeur graphique de circuits":
         k: v for k, v in st.session_state.bornes_par_arete.items() if k in edge_ids
     }
 
-    st.subheader("🔌 Bornes utilisées pour chaque fil")
+    # Les bornes sont maintenant déterminées par les broches graphiques réellement reliées.
+    st.session_state.bornes_par_arete = _paires_bornes_graphiques(state_graph)
+    st.subheader("🔌 Connexions broche à broche")
     if not state_graph.nodes:
         st.warning("Le canevas est vide : placez les composants à gauche.")
     elif not state_graph.edges:
-        st.info("Aucun fil : reliez deux composants dans le canevas.")
+        st.info("Aucun fil : reliez directement deux broches bleues dans le canevas.")
     else:
-        noeuds = {n.id: n for n in state_graph.nodes}
+        nodes_edge = {n.id: n for n in state_graph.nodes}
         for edge in state_graph.edges:
-            n1, n2 = noeuds.get(edge.source), noeuds.get(edge.target)
-            if not n1 or not n2:
+            info = _infos_borne_arete(state_graph, edge)
+            if not info: continue
+            ca, ba, cb, bb = info
+            na, nb = nodes_edge.get(ca), nodes_edge.get(cb)
+            if not na or not nb or not ba or not bb:
+                st.warning("Ancienne liaison sans broches : supprimez-la et recréez le fil entre deux broches.")
                 continue
-            nom1, nom2 = n1.data.get("component", n1.id), n2.data.get("component", n2.id)
-            bornes1, bornes2 = n1.data.get("terminals", []), n2.data.get("terminals", [])
-            valeur = st.session_state.bornes_par_arete.get(edge.id, (bornes1[0], bornes2[0]))
-            st.markdown(f"**Fil : {nom1} → {nom2}**")
-            ca, cb = st.columns(2)
-            with ca:
-                choix1 = st.selectbox(
-                    f"Borne sur {nom1}", bornes1,
-                    index=bornes1.index(valeur[0]) if valeur[0] in bornes1 else 0,
-                    key=f"src_terminal_{edge.id}",
-                )
-            with cb:
-                choix2 = st.selectbox(
-                    f"Borne sur {nom2}", bornes2,
-                    index=bornes2.index(valeur[1]) if valeur[1] in bornes2 else 0,
-                    key=f"dst_terminal_{edge.id}",
-                )
-            st.session_state.bornes_par_arete[edge.id] = (choix1, choix2)
-            couleur_defaut = st.session_state.couleurs_fils_par_arete.get(
-                edge.id, _couleur_initiale_fil(choix1, choix2)
-            )
+            st.markdown(f"**{na.data.get('instance')}.{ba}  ↔  {nb.data.get('instance')}.{bb}**")
+            choix = st.session_state.bornes_par_arete.get(edge.id, (ba, bb))
+            couleur_defaut = st.session_state.couleurs_fils_par_arete.get(edge.id, _couleur_initiale_fil(*choix))
             options_couleur = list(COULEURS_FILS.keys())
-            index_couleur = options_couleur.index(couleur_defaut) if couleur_defaut in options_couleur else 0
-            couleur_choisie = st.selectbox(
-                "Couleur / fonction du conducteur", options_couleur,
-                index=index_couleur, key=f"wire_color_{edge.id}"
-            )
-            st.session_state.couleurs_fils_par_arete[edge.id] = couleur_choisie
-            couleur_hex = COULEURS_FILS[couleur_choisie]["hex"]
-            st.markdown(
-                f"<span style='display:inline-block;width:42px;height:8px;background:{couleur_hex};"
-                f"border-radius:5px;vertical-align:middle'></span> **{html_escape(couleur_choisie)}**",
-                unsafe_allow_html=True,
-            )
+            couleur = st.selectbox("Couleur / fonction du conducteur", options_couleur,
+                index=options_couleur.index(couleur_defaut) if couleur_defaut in options_couleur else 0,
+                key=f"wire_color_{edge.id}")
+            st.session_state.couleurs_fils_par_arete[edge.id] = couleur
             st.divider()
 
     if state_graph.edges:
@@ -1292,14 +1298,15 @@ elif espace == "🧩 Éditeur graphique de circuits":
     st.divider()
     st.header("🔬 Simulation du circuit réellement câblé — solveur DC")
     st.markdown(
-        "Les fils du canevas sont utilisés pour fusionner les bornes en nœuds électriques. "
-        "Le solveur calcule ensuite les tensions, courants et puissances pour les résistances "
-        "et sources indépendantes continues."
+        "Les connexions entre broches forment les nœuds électriques. Le solveur DC permanent "
+        "calcule résistances, sources continues, diodes à seuil, bobines, enroulements moteurs "
+        "simplifiés et bobines de contacteurs avec états de contacts configurables. Les condensateurs "
+        "sont ouverts en régime permanent DC ; les phénomènes transitoires nécessitent une analyse temporelle."
     )
     supported_nodes = [
-        n for n in state_graph.nodes
-        if n.data.get("component") in (
-            "Résistance", "Résistance de puissance", "Source de tension DC", "Source de courant DC"
+        n for n in state_graph.nodes if n.data.get("node_role") == "composant" and n.data.get("component") in (
+            "Résistance", "Résistance de puissance", "Source de tension DC", "Source de courant DC",
+            "Bobine", "Condensateur", "Diode de puissance", "Moteur asynchrone triphasé", "Contacteur KM1"
         )
     ]
     parametres_dc = {}
@@ -1308,14 +1315,23 @@ elif espace == "🧩 Éditeur graphique de circuits":
         for node in supported_nodes:
             typ = node.data.get("component")
             ident = node.data.get("instance", typ)
-            default_value = 100.0 if typ in ("Résistance", "Résistance de puissance") else (12.0 if typ == "Source de tension DC" else 0.1)
-            unit = "Ω" if "Résistance" in typ else ("V" if typ == "Source de tension DC" else "A")
-            valeur = st.number_input(
-                f"{ident} — valeur ({unit})", min_value=0.000001,
-                max_value=100000000.0, value=float(default_value), format="%.6g",
-                key=f"dc_value_{node.id}"
-            )
-            parametres_dc[node.id] = {"value": valeur}
+            parametres_dc[node.id] = {}
+            if typ in ("Résistance", "Résistance de puissance"):
+                parametres_dc[node.id]["value"] = st.number_input(f"{ident} — résistance (Ω)", min_value=0.000001, value=100.0, format="%.6g", key=f"dc_value_{node.id}")
+            elif typ == "Source de tension DC":
+                parametres_dc[node.id]["value"] = st.number_input(f"{ident} — tension (V)", value=12.0, format="%.6g", key=f"dc_value_{node.id}")
+            elif typ == "Source de courant DC":
+                parametres_dc[node.id]["value"] = st.number_input(f"{ident} — courant (A)", value=0.1, format="%.6g", key=f"dc_value_{node.id}")
+            elif typ == "Bobine":
+                parametres_dc[node.id]["modele_bobine"] = st.selectbox(f"{ident} — modèle DC", ["résistance DC", "inductance idéale (court-circuit DC)"], key=f"dc_bob_mode_{node.id}")
+                if parametres_dc[node.id]["modele_bobine"] == "résistance DC": parametres_dc[node.id]["value"] = st.number_input(f"{ident} — résistance cuivre (Ω)", min_value=0.0001, value=20.0, key=f"dc_bob_r_{node.id}")
+            elif typ == "Diode de puissance":
+                parametres_dc[node.id]["vf"] = st.number_input(f"{ident} — seuil direct Vf (V)", min_value=0.1, max_value=2.0, value=0.7, step=0.05, key=f"dc_diode_{node.id}")
+            elif typ == "Moteur asynchrone triphasé":
+                parametres_dc[node.id]["value"] = st.number_input(f"{ident} — résistance par enroulement (Ω)", min_value=0.001, value=12.0, key=f"dc_motor_{node.id}")
+            elif typ == "Contacteur KM1":
+                parametres_dc[node.id]["coil_r"] = st.number_input(f"{ident} — résistance bobine A1/A2 (Ω)", min_value=1.0, value=1000.0, key=f"dc_coil_{node.id}")
+                parametres_dc[node.id]["contacts_fermes"] = st.checkbox(f"{ident} — contacts de puissance et auxiliaire NO fermés", value=False, key=f"dc_contacts_{node.id}")
 
         # Reconstituer les réseaux électriques pour proposer un choix de masse
         # et des points de mesure qui correspondent aux fils réellement posés.
@@ -1330,18 +1346,19 @@ elif espace == "🧩 Éditeur graphique de circuits":
             if ra != rb:
                 parent_mesure[rb] = ra
         for node in state_graph.nodes:
-            for terminal in node.data.get("terminals", []):
-                find_mesure(f"{node.id}::{terminal}")
+            if node.data.get("node_role") != "composant": continue
+            for terminal in node.data.get("terminals", []): find_mesure(f"{node.id}::{terminal}")
         for edge in state_graph.edges:
-            pair = st.session_state.bornes_par_arete.get(edge.id)
-            if pair and edge.source in {n.id for n in state_graph.nodes} and edge.target in {n.id for n in state_graph.nodes}:
-                union_mesure(f"{edge.source}::{pair[0]}", f"{edge.target}::{pair[1]}")
+            info = _infos_borne_arete(state_graph, edge)
+            if info:
+                ca, ba, cb, bb = info
+                if ca and cb and ba and bb: union_mesure(f"{ca}::{ba}", f"{cb}::{bb}")
         racines = {}
         terminal_vers_noeud = {}
         for node in state_graph.nodes:
+            if node.data.get("node_role") != "composant": continue
             for terminal in node.data.get("terminals", []):
-                cle = f"{node.id}::{terminal}"
-                racine = find_mesure(cle)
+                cle = f"{node.id}::{terminal}"; racine = find_mesure(cle)
                 racines.setdefault(racine, f"N{len(racines)+1}")
                 terminal_vers_noeud[f"{node.data.get('instance', node.data.get('component'))}.{terminal}"] = racines[racine]
         noeuds_disponibles = sorted(set(terminal_vers_noeud.values()))
@@ -1402,14 +1419,15 @@ elif espace == "🧩 Éditeur graphique de circuits":
                 st.metric("Courant mesuré (+ vers -)", f"{ligne_mesure['Courant (+ vers -) (A)']:.6g} A")
                 st.caption(f"Tension aux bornes : {ligne_mesure['Tension (V)']:.6g} V · Puissance : {ligne_mesure['Puissance absorbée (W)']:.6g} W")
     else:
-        st.info("Ajoutez au moins une résistance ou une source DC pour lancer le solveur. Les autres composants restent visibles dans le laboratoire, mais ne sont pas encore modélisés par ce solveur.")
+        st.info("Ajoutez une source DC et au moins un composant conducteur pris en charge. Un condensateur seul est ouvert en régime permanent continu.")
 
-    st.warning(
-        "Limite de cette étape : les bornes sont affichées sur les blocs et chaque fil est "
-        "affecté à deux bornes dans la liste de configuration. La bibliothèque Streamlit Flow "
-        "utilisée ici ne fournit pas, dans cette intégration, de poignées graphiques indépendantes "
-        "sur chaque broche. Le solveur DC ne modélise que R/V/I idéaux ; il ne calcule pas encore "
-        "les moteurs, contacteurs, diodes, condensateurs ou bobines."
+    st.info(
+        "Modèles actuellement disponibles : résistances, sources DC, diodes à seuil constant, "
+        "bobines avec résistance cuivre ou inductance idéale en régime permanent, "
+        "enroulements moteurs représentés par trois résistances, et bobines/contacts de contacteurs. "
+        "Les condensateurs sont modélisés comme circuits ouverts en DC permanent. "
+        "Les transitoires RC/RL, la commutation détaillée, le glissement et la FEM des moteurs "
+        "nécessitent un solveur temporel spécialisé."
     )
 
     st.divider()
@@ -1574,77 +1592,11 @@ elif espace == "🧩 Éditeur graphique de circuits":
         )
 
 
-    st.divider()
-    st.header("🧮 Solveur électrique DC — calcul à partir du câblage")
-    st.caption(
-        "Le solveur lit les fils du canevas et fusionne les bornes reliées. "
-        "Il résout les circuits résistifs linéaires avec sources DC idéales. "
-        "Les moteurs, contacteurs, diodes, condensateurs et bobines ne sont pas encore modélisés dans ce solveur."
-    )
-    noeuds_solveur = {n.id: n for n in state_graph.nodes}
-    elements_solveur = [n for n in state_graph.nodes if n.data.get("component") in (
-        "Résistance", "Résistance de puissance", "Source de tension DC", "Source de courant DC"
-    )]
-    if not elements_solveur:
-        st.info("Placez au moins une résistance et une source DC depuis la bibliothèque pour utiliser ce solveur.")
-    else:
-        params_dc = {}
-        for element in elements_solveur:
-            nom_element = element.data.get("instance", element.data.get("component"))
-            typ_element = element.data.get("component")
-            if typ_element in ("Résistance", "Résistance de puissance"):
-                valeur = st.number_input(f"{nom_element} — valeur (Ω)", min_value=0.001, value=100.0, step=1.0, key=f"dc_{element.id}")
-            elif typ_element == "Source de tension DC":
-                valeur = st.number_input(f"{nom_element} — tension (+ vers -) (V)", value=12.0, step=1.0, key=f"dc_{element.id}")
-            else:
-                valeur = st.number_input(f"{nom_element} — courant (+ vers -) (A)", value=0.1, step=0.01, key=f"dc_{element.id}")
-            params_dc[element.id] = {"value": valeur}
-
-        # Construire les réseaux pour proposer le choix de la masse.
-        parent_ui = {}
-        def root_ui(x):
-            parent_ui.setdefault(x, x)
-            if parent_ui[x] != x:
-                parent_ui[x] = root_ui(parent_ui[x])
-            return parent_ui[x]
-        def join_ui(a, b):
-            ra, rb = root_ui(a), root_ui(b)
-            if ra != rb:
-                parent_ui[rb] = ra
-        for node in state_graph.nodes:
-            for terminal in node.data.get("terminals", []):
-                root_ui(f"{node.id}::{terminal}")
-        for edge in state_graph.edges:
-            pair = st.session_state.bornes_par_arete.get(edge.id)
-            if pair and edge.source in noeuds_solveur and edge.target in noeuds_solveur:
-                join_ui(f"{edge.source}::{pair[0]}", f"{edge.target}::{pair[1]}")
-        net_names = {}
-        for node in state_graph.nodes:
-            for terminal in node.data.get("terminals", []):
-                rt = root_ui(f"{node.id}::{terminal}")
-                net_names.setdefault(rt, f"N{len(net_names)+1}")
-        nets_choices = sorted(set(net_names.values()))
-        if nets_choices:
-            masse = st.selectbox("Nœud de référence (masse 0 V)", nets_choices, key="dc_ground")
-            if st.button("▶️ Résoudre le circuit DC", type="primary", key="run_dc_solver"):
-                try:
-                    tensions_dc, tableau_dc = resoudre_circuit_dc(
-                        state_graph, st.session_state.bornes_par_arete, params_dc, masse
-                    )
-                    st.success("Résolution DC terminée.")
-                    st.subheader("Tensions des nœuds")
-                    st.dataframe(pd.DataFrame([{"Nœud": k, "Tension (V)": v} for k, v in sorted(tensions_dc.items())]), use_container_width=True, hide_index=True)
-                    st.subheader("Courants et puissances des composants")
-                    st.dataframe(tableau_dc, use_container_width=True, hide_index=True)
-                    st.metric("Puissance totale absorbée nette", f"{tableau_dc['Puissance absorbée (W)'].sum():.6g} W")
-                    st.caption("Convention : courant positif de la borne + vers la borne -. Une puissance négative signifie que le composant fournit de l'énergie au circuit.")
-                except Exception as erreur_dc:
-                    st.error(f"Impossible de résoudre ce montage : {erreur_dc}")
-
     st.subheader("🧪 Simulation logique et correction")
     st.warning(
-        "La correction pédagogique vérifie la topologie. Le solveur DC séparé résout "
-        "les réseaux R/V/I pris en charge à partir des fils. Aucun appareil physique n'est commandé."
+        "La correction pédagogique vérifie la topologie et les connexions entre broches. "
+        "Le solveur DC utilise les modèles permanents simplifiés décrits ci-dessus ; "
+        "il ne commande aucun appareil physique réel."
     )
     if st.button("▶️ Lancer la simulation et corriger", type="primary", use_container_width=True):
         if not identite_complete:
