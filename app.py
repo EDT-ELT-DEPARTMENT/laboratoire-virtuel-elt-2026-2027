@@ -259,12 +259,31 @@ COMPOSANTS = {
 # Les valeurs nominales dépendent de la référence exacte du fabricant :
 # elles ne sont volontairement pas inventées lorsqu'elles ne sont pas connues.
 # ---------------------------------------------------------------------
+# Les illustrations génériques sont déposées directement à la racine du dépôt
+# GitHub (à côté de app.py). Les illustrations propres à une marque, si elles
+# existent, restent prioritaires dans assets/composants/<marque>/.
 DOSSIER_PHOTOS_COMPOSANTS = BASE_DIR_LAB / "assets" / "composants"
+DOSSIER_PHOTOS_RACINE = BASE_DIR_LAB
 MARQUES_COMPOSANTS = {
     "Schneider Electric": "schneider-electric",
     "ABB": "abb",
     "Siemens": "siemens",
 }
+
+
+def _chemin_photo_composant(nom, marque="Schneider Electric"):
+    """Retourne l'image de marque si disponible, sinon l'image générique racine."""
+    nom_fichier = f"{_slug_composant(nom)}.jpg"
+    dossier_marque = MARQUES_COMPOSANTS.get(marque, "schneider-electric")
+    candidats = [
+        DOSSIER_PHOTOS_COMPOSANTS / dossier_marque / nom_fichier,
+        DOSSIER_PHOTOS_RACINE / nom_fichier,
+    ]
+    for chemin in candidats:
+        if chemin.is_file():
+            return chemin
+    # Conserver le chemin de marque comme cible attendue pour le message d'aide.
+    return candidats[0]
 
 DESCRIPTIONS_COMPOSANTS = {
     "Moteur asynchrone triphasé": ("Convertit l'énergie électrique triphasée en énergie mécanique par induction électromagnétique.", "Moteur triphasé", "Plaque signalétique : tension, couplage Δ/Y, puissance, courant, fréquence, cos φ, rendement et vitesse.", "U1, V1, W1 : début des enroulements ; U2, V2, W2 : fins ; PE : terre de protection.", "Entraînement de pompes, ventilateurs, convoyeurs et machines industrielles."),
@@ -326,20 +345,28 @@ def fiche_composant(nom, categorie, bornes, marque="Schneider Electric"):
     return {
         "fonction": fonction, "symbole": SYMBOLES_ELECTRIQUES.get(nom, f"─[ {symbole} ]─"),
         "caracteristiques": caracteristiques, "bornes": bornes_desc, "utilisation": utilisation,
-        "photo": DOSSIER_PHOTOS_COMPOSANTS / MARQUES_COMPOSANTS.get(marque, "schneider-electric") / f"{_slug_composant(nom)}.jpg",
+        "photo": _chemin_photo_composant(nom, marque),
         "marque": marque,
     }
 
 def afficher_photo_composant(nom, fiche, width=None):
     chemin = fiche["photo"]
     if chemin.is_file():
-        st.image(str(chemin), caption=f"Illustration générée par IA — {fiche['marque']} — {nom}", use_container_width=True)
+        origine = "illustration spécifique à la marque" if DOSSIER_PHOTOS_COMPOSANTS in chemin.parents else "illustration générique"
+        st.image(
+            str(chemin),
+            caption=f"Illustration pédagogique IA — {fiche['marque']} — {nom} ({origine})",
+            use_container_width=True,
+        )
     else:
+        dossier_marque = MARQUES_COMPOSANTS.get(fiche["marque"], "schneider-electric")
         st.info(
-            f"Aucune illustration IA installée pour **{nom}** dans le dossier de la marque **{fiche['marque']}**. "
-            f"Pour l’ajouter, placez le fichier `{chemin.name}` dans le dossier "
-            f"`assets/composants/{MARQUES_COMPOSANTS.get(fiche['marque'], 'schneider-electric')}/`. "
-            "Les images sont des illustrations pédagogiques IA non contractuelles : elles ne représentent pas un modèle commercial exact du fabricant sélectionné."
+            f"Aucune illustration IA disponible pour **{nom}**. "
+            f"Le simulateur a recherché `{_slug_composant(nom)}.jpg` à la racine du dépôt "
+            f"et dans `assets/composants/{dossier_marque}/`. "
+            "Ajoutez l'image à l'un de ces emplacements. "
+            "Les images sont des illustrations pédagogiques IA non contractuelles : "
+            "elles ne représentent pas un modèle commercial exact du fabricant sélectionné."
         )
 
 # ---------------------------------------------------------------------
