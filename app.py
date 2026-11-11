@@ -586,13 +586,13 @@ def liste_composants_selectionnes(noms):
 
 
 def laboratoire_enseignant_interactif():
-    """Laboratoire virtuel enseignant : générateur de TP, appareils, simulation, mesures et corrigé."""
+    """Laboratoire enseignant entièrement lié : le TP généré commande la simulation, les mesures, l'oscilloscope et le corrigé."""
 
     st.divider()
     st.header("🧪 Laboratoire virtuel enseignant")
     st.caption(
-        "Générateur de TP, commandes d'appareils, simulation, mesures numériques, "
-        "oscilloscope virtuel et corrigé confidentiel."
+        "Générez d'abord le TP : la simulation, les mesures, l'oscilloscope "
+        "et le corrigé utilisent automatiquement la même configuration."
     )
 
     onglets = st.tabs([
@@ -862,25 +862,18 @@ def laboratoire_enseignant_interactif():
                 f"{valeur_pot / 100 * 1000:.0f} Ω pour un potentiomètre de 1 kΩ."
             )
 
-    # ------------------------------------------------------------------
-    # 2. Simulation et mesures
-    # ------------------------------------------------------------------
-    with onglets[1]:
-
-        st.subheader("Simulation du montage")
-        st.caption(
-            "Les résultats sont recalculés à partir du TP, des composants "
-            "et des réglages des appareils."
-        )
+        st.divider()
 
         if st.button(
-            "▶️ Lancer le calcul du fonctionnement du montage",
+            "⚙️ Générer et appliquer le TP",
             type="primary",
             use_container_width=True,
-            key="lab_lancer_simulation"
+            key="lab_generer_tp"
         ):
-            st.session_state["lab_resultats"] = {
+            st.session_state["lab_configuration"] = {
                 "tp": tp_lab,
+                "marque": marque_lab,
+                "composants": composants_lab,
                 "u": u_lab,
                 "f": f_lab,
                 "r": r_lab,
@@ -890,35 +883,61 @@ def laboratoire_enseignant_interactif():
                 "vitesse": vitesse_lab,
                 "u_alim": u_alim,
                 "i_max": i_max,
-                "pot": valeur_pot
+                "pot": valeur_pot,
+                "calibre_v": calibre_v,
+                "mode_v": mode_v,
+                "calibre_a": calibre_a,
+                "mode_a": mode_a,
+                "fonction_m": fonction_m,
+                "calibre_m": calibre_m
             }
+            st.session_state["lab_osc_actif"] = True
+            st.success(
+                f"TP « {tp_lab} » généré. Les autres onglets utilisent maintenant cette configuration."
+            )
 
-        resultats = st.session_state.get("lab_resultats")
+    configuration = st.session_state.get("lab_configuration")
 
-        if resultats is None:
-            st.info("Réglez les paramètres puis lancez la simulation.")
+    # ------------------------------------------------------------------
+    # 2. Simulation et mesures liées au TP généré
+    # ------------------------------------------------------------------
+    with onglets[1]:
+
+        st.subheader("Simulation liée au TP généré")
+
+        if configuration is None:
+            st.warning(
+                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
+            )
 
         else:
-            u = resultats["u"]
-            f = resultats["f"]
-            r = max(resultats["r"], 1e-6)
-            c = resultats["c"]
-            l = resultats["l"]
+            st.success(
+                f"TP actif : {configuration['tp']} — "
+                f"tension {configuration['u']:.4g} V — "
+                f"fréquence {configuration['f']:.4g} Hz"
+            )
 
-            if "Graetz" in resultats["tp"] or "Redressement" in resultats["tp"]:
+            u = configuration["u"]
+            f = configuration["f"]
+            r = max(configuration["r"], 1e-6)
+            c = configuration["c"]
+            l = configuration["l"]
+            tp_actif = configuration["tp"]
+
+            if "Graetz" in tp_actif or "Redressement" in tp_actif:
 
                 v_moy = 0.9 * u
                 i_moy = v_moy / r
-                p = v_moy * i_moy
+                p_moy = v_moy * i_moy
 
                 grandeurs = {
                     "Tension moyenne DC": (v_moy, "V"),
                     "Courant moyen DC": (i_moy, "A"),
-                    "Puissance DC": (p, "W"),
+                    "Puissance DC": (p_moy, "W"),
                     "Fréquence d'ondulation": (2 * f, "Hz")
                 }
 
-            elif "RC" in resultats["tp"]:
+            elif "RC" in tp_actif:
 
                 tau = r * c
                 v_final = u
@@ -931,7 +950,7 @@ def laboratoire_enseignant_interactif():
                     "Fréquence": (f, "Hz")
                 }
 
-            elif "Arduino" in resultats["tp"]:
+            elif "Arduino" in tp_actif:
 
                 v_led = 2.0
                 i_led = max(0.0, (u - v_led) / r) * 1000
@@ -945,11 +964,12 @@ def laboratoire_enseignant_interactif():
                     )
                 }
 
-            elif "moteur asynchrone" in resultats["tp"].lower():
+            elif "moteur asynchrone" in tp_actif.lower():
 
                 p_utile = max(
                     0.05,
-                    couple_moteur * vitesse_moteur * 2 * math.pi / 60 / 1000
+                    configuration["couple"] * configuration["vitesse"]
+                    * 2 * math.pi / 60 / 1000
                 )
 
                 rendement = 0.86
@@ -958,14 +978,14 @@ def laboratoire_enseignant_interactif():
                 p_absorbee = p_utile / rendement
                 s = p_absorbee / cos_phi
                 i_ligne = s * 1000 / (math.sqrt(3) * max(u, 1.0))
-                couple = 9550 * p_utile / max(vitesse_moteur, 1.0)
+                couple = 9550 * p_utile / max(configuration["vitesse"], 1.0)
 
                 grandeurs = {
                     "Puissance utile": (p_utile, "kW"),
                     "Puissance absorbée": (p_absorbee, "kW"),
                     "Courant de ligne": (i_ligne, "A"),
                     "Couple": (couple, "N·m"),
-                    "Vitesse": (vitesse_moteur, "tr/min"),
+                    "Vitesse": (configuration["vitesse"], "tr/min"),
                     "Rendement": (rendement * 100, "%"),
                     "Fréquence": (f, "Hz")
                 }
@@ -1004,8 +1024,8 @@ def laboratoire_enseignant_interactif():
             )
 
             grandeurs["Fréquence"] = (f, "Hz")
-            grandeurs["Vitesse"] = (vitesse_moteur, "tr/min")
-            grandeurs["Couple"] = (couple_moteur, "N·m")
+            grandeurs["Vitesse"] = (configuration["vitesse"], "tr/min")
+            grandeurs["Couple"] = (configuration["couple"], "N·m")
             grandeurs["Rendement"] = (
                 grandeurs.get("Rendement", (0.0, "%"))[0],
                 "%"
@@ -1057,7 +1077,11 @@ def laboratoire_enseignant_interactif():
                 }
 
                 if unite in calibres:
-                    calibre_actif = calibre_v if unite == "V" else calibre_a
+                    calibre_actif = (
+                        configuration["calibre_v"]
+                        if unite == "V"
+                        else configuration["calibre_a"]
+                    )
                     nombre, prefixe = calibre_actif.split()
                     limite = float(nombre) * facteurs[prefixe]
                     depassement = abs(valeur) > limite
@@ -1079,7 +1103,7 @@ def laboratoire_enseignant_interactif():
                 with col_res2:
                     st.caption(
                         f"Calibre actif : {calibre_actif} — "
-                        f"mode {mode_v if unite == 'V' else mode_a}"
+                        f"mode {configuration['mode_v'] if unite == 'V' else configuration['mode_a']}"
                     )
 
             else:
@@ -1108,132 +1132,133 @@ def laboratoire_enseignant_interactif():
 
             courant_calcule = grandeurs.get("Courant", (0.0, "A"))[0]
 
-            if resultats["i_max"] > 0 and courant_calcule > resultats["i_max"]:
+            if configuration["i_max"] > 0 and courant_calcule > configuration["i_max"]:
                 st.warning(
-                    "⚠️ Limitation de courant de l'alimentation atteinte : "
-                    "réduisez la tension ou augmentez la limite."
+                    "⚠️ Limitation de courant de l'alimentation atteinte."
                 )
 
     # ------------------------------------------------------------------
-    # 3. Oscilloscope virtuel
+    # 3. Oscilloscope lié au TP généré
     # ------------------------------------------------------------------
     with onglets[2]:
 
         st.subheader("Oscilloscope virtuel")
 
-        col_o1, col_o2, col_o3, col_o4 = st.columns(4)
-
-        with col_o1:
-            canal = st.selectbox(
-                "Canal affiché",
-                [
-                    "CH1 — Tension",
-                    "CH2 — Courant",
-                    "CH1 + CH2"
-                ],
-                key="lab_osc_canal"
+        if configuration is None:
+            st.warning(
+                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
             )
 
-            v_div = st.select_slider(
-                "V/div",
-                [
-                    "50 mV",
-                    "100 mV",
-                    "200 mV",
-                    "500 mV",
-                    "1 V",
-                    "2 V",
-                    "5 V",
-                    "10 V",
-                    "20 V",
-                    "50 V",
-                    "100 V"
-                ],
-                value="10 V",
-                key="lab_osc_vdiv"
-            )
+        else:
 
-        with col_o2:
-            t_div = st.select_slider(
-                "s/div",
-                [
-                    "100 µs",
-                    "200 µs",
-                    "500 µs",
-                    "1 ms",
-                    "2 ms",
-                    "5 ms",
-                    "10 ms",
-                    "20 ms",
-                    "50 ms"
-                ],
-                value="5 ms",
-                key="lab_osc_tdiv"
-            )
+            col_o1, col_o2, col_o3, col_o4 = st.columns(4)
 
-            couplage = st.radio(
-                "Couplage",
-                ["DC", "AC"],
-                horizontal=True,
-                key="lab_osc_couplage"
-            )
+            with col_o1:
+                canal = st.selectbox(
+                    "Canal affiché",
+                    [
+                        "CH1 — Tension",
+                        "CH2 — Courant",
+                        "CH1 + CH2"
+                    ],
+                    key="lab_osc_canal"
+                )
 
-        with col_o3:
-            declenchement = st.slider(
-                "Niveau de déclenchement (V)",
-                -300.0,
-                300.0,
-                0.0,
-                0.5,
-                key="lab_osc_trigger"
-            )
+                v_div = st.select_slider(
+                    "V/div",
+                    [
+                        "50 mV",
+                        "100 mV",
+                        "200 mV",
+                        "500 mV",
+                        "1 V",
+                        "2 V",
+                        "5 V",
+                        "10 V",
+                        "20 V",
+                        "50 V",
+                        "100 V"
+                    ],
+                    value="10 V",
+                    key="lab_osc_vdiv"
+                )
 
-            pente = st.selectbox(
-                "Pente",
-                ["Montante", "Descendante"],
-                key="lab_osc_pente"
-            )
+            with col_o2:
+                t_div = st.select_slider(
+                    "s/div",
+                    [
+                        "100 µs",
+                        "200 µs",
+                        "500 µs",
+                        "1 ms",
+                        "2 ms",
+                        "5 ms",
+                        "10 ms",
+                        "20 ms",
+                        "50 ms"
+                    ],
+                    value="5 ms",
+                    key="lab_osc_tdiv"
+                )
 
-        with col_o4:
-            curseur1 = st.slider(
-                "Curseur 1 (ms)",
-                0.0,
-                100.0,
-                20.0,
-                0.5,
-                key="lab_osc_curseur1"
-            )
+                couplage = st.radio(
+                    "Couplage",
+                    ["DC", "AC"],
+                    horizontal=True,
+                    key="lab_osc_couplage"
+                )
 
-            curseur2 = st.slider(
-                "Curseur 2 (ms)",
-                0.0,
-                100.0,
-                60.0,
-                0.5,
-                key="lab_osc_curseur2"
-            )
+            with col_o3:
+                declenchement = st.slider(
+                    "Niveau de déclenchement (V)",
+                    -300.0,
+                    300.0,
+                    0.0,
+                    0.5,
+                    key="lab_osc_trigger"
+                )
 
-        if st.button(
-            "Actualiser l'oscilloscope",
-            type="primary",
-            use_container_width=True,
-            key="lab_osc_actualiser"
-        ):
-            st.session_state["lab_osc_actif"] = True
+                pente = st.selectbox(
+                    "Pente",
+                    ["Montante", "Descendante"],
+                    key="lab_osc_pente"
+                )
 
-        if st.session_state.get("lab_osc_actif"):
+            with col_o4:
+                curseur1 = st.slider(
+                    "Curseur 1 (ms)",
+                    0.0,
+                    100.0,
+                    20.0,
+                    0.5,
+                    key="lab_osc_curseur1"
+                )
 
-            if mode_v == "AC":
-                amplitude = u_lab / math.sqrt(2)
-                t = np.linspace(0, 10 / max(f_lab, 0.1), 2000)
-                ch1 = amplitude * np.sin(2 * math.pi * f_lab * t)
-                ch2 = amplitude / r_lab * np.sin(2 * math.pi * f_lab * t)
+                curseur2 = st.slider(
+                    "Curseur 2 (ms)",
+                    0.0,
+                    100.0,
+                    60.0,
+                    0.5,
+                    key="lab_osc_curseur2"
+                )
+
+            u_osc = configuration["u"]
+            f_osc = configuration["f"]
+            r_osc = max(configuration["r"], 1e-6)
+            mode_osc = configuration["mode_v"]
+
+            if mode_osc == "AC":
+                amplitude = u_osc / math.sqrt(2)
+                t = np.linspace(0, 10 / max(f_osc, 0.1), 2000)
+                ch1 = amplitude * np.sin(2 * math.pi * f_osc * t)
+                ch2 = amplitude / r_osc * np.sin(2 * math.pi * f_osc * t)
 
             else:
-                amplitude = u_lab / 2
+                amplitude = u_osc / 2
                 t = np.linspace(0, 0.1, 2000)
-                ch1 = np.full_like(t, u_lab)
-                ch2 = np.full_like(t, u_lab / r_lab)
+                ch1 = np.full_like(t, u_osc)
+                ch2 = np.full_like(t, u_osc / r_osc)
 
             if couplage == "AC":
                 ch1 = ch1 - np.mean(ch1)
@@ -1284,7 +1309,10 @@ def laboratoire_enseignant_interactif():
             )
 
             fig.update_layout(
-                title=f"Oscilloscope — {v_div}/div, {t_div}/div, couplage {couplage}",
+                title=(
+                    f"Oscilloscope — {configuration['tp']} — "
+                    f"{v_div}/div, {t_div}/div, couplage {couplage}"
+                ),
                 xaxis_title="Temps (ms)",
                 yaxis_title="Tension (V)",
                 yaxis2=dict(
@@ -1304,82 +1332,86 @@ def laboratoire_enseignant_interactif():
             )
 
             st.caption(
-                f"Fenêtre affichée : 10 divisions × {t_div}. "
-                f"Résolution verticale : {v_div}/div."
-            )
-
-        else:
-            st.info(
-                "Cliquez sur « Actualiser l'oscilloscope » pour tracer les signaux."
+                f"Signaux calculés à partir du TP « {configuration['tp']} », "
+                f"de la tension {u_osc:.4g} V et de la fréquence {f_osc:.4g} Hz."
             )
 
     # ------------------------------------------------------------------
-    # 4. Corrigé confidentiel
+    # 4. Corrigé confidentiel lié au TP généré
     # ------------------------------------------------------------------
     with onglets[3]:
 
         st.subheader("🔒 Corrigé confidentiel")
-        st.caption(
-            "Le schéma câblé de référence et la liste des liaisons sont accessibles "
-            "uniquement après confirmation du mot de passe enseignant."
-        )
 
-        mot_de_passe_corrige = st.text_input(
-            "Mot de passe du corrigé",
-            type="password",
-            key="lab_mdp_corrige"
-        )
-
-        if st.button(
-            "Afficher le corrigé",
-            type="primary",
-            use_container_width=True,
-            key="lab_afficher_corrige"
-        ):
-            cle = obtenir_mot_de_passe_enseignant()
-
-            if cle and hmac.compare_digest(mot_de_passe_corrige, cle):
-                st.session_state["lab_corrige_autorise"] = True
-            else:
-                st.error("Mot de passe incorrect.")
-                st.session_state["lab_corrige_autorise"] = False
-
-        if st.session_state.get("lab_corrige_autorise"):
-
-            st.success("Accès au corrigé autorisé.")
-
-            st.plotly_chart(
-                creer_schema_tp(tp_lab),
-                use_container_width=True,
-                key="lab_schema_corrige"
+        if configuration is None:
+            st.warning(
+                "⚠️ Générez d'abord le TP dans l'onglet « 1. Générateur de TP »."
             )
-
-            liaisons = tp_data.get("liaisons", [])
-
-            if liaisons:
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {
-                                "Borne de départ": a,
-                                "Borne d'arrivée": b
-                            }
-                            for a, b in liaisons
-                        ]
-                    ),
-                    use_container_width=True,
-                    hide_index=True
-                )
-            else:
-                st.info(
-                    "Aucune liaison de référence n'est enregistrée pour ce TP."
-                )
 
         else:
+            tp_corrige = configuration["tp"]
+            tp_data_corrige = TPS[tp_corrige]
+
             st.info(
-                "Entrez le mot de passe enseignant pour consulter "
-                "le schéma câblé de référence."
+                f"Corrigé du TP généré : {tp_corrige}"
             )
+
+            mot_de_passe_corrige = st.text_input(
+                "Mot de passe du corrigé",
+                type="password",
+                key="lab_mdp_corrige"
+            )
+
+            if st.button(
+                "Afficher le corrigé",
+                type="primary",
+                use_container_width=True,
+                key="lab_afficher_corrige"
+            ):
+                cle = obtenir_mot_de_passe_enseignant()
+
+                if cle and hmac.compare_digest(mot_de_passe_corrige, cle):
+                    st.session_state["lab_corrige_autorise"] = True
+                else:
+                    st.error("Mot de passe incorrect.")
+                    st.session_state["lab_corrige_autorise"] = False
+
+            if st.session_state.get("lab_corrige_autorise"):
+
+                st.success("Accès au corrigé autorisé.")
+
+                st.plotly_chart(
+                    creer_schema_tp(tp_corrige),
+                    use_container_width=True,
+                    key="lab_schema_corrige"
+                )
+
+                liaisons = tp_data_corrige.get("liaisons", [])
+
+                if liaisons:
+                    st.dataframe(
+                        pd.DataFrame(
+                            [
+                                {
+                                    "Borne de départ": a,
+                                    "Borne d'arrivée": b
+                                }
+                                for a, b in liaisons
+                            ]
+                        ),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                else:
+                    st.info(
+                        "Aucune liaison de référence n'est enregistrée pour ce TP."
+                    )
+
+            else:
+                st.info(
+                    "Entrez le mot de passe enseignant pour consulter "
+                    "le schéma câblé de référence."
+                )
 
 
 def normaliser_liaison(a, b):
