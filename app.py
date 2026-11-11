@@ -1805,7 +1805,7 @@ elif espace == "🧪 Réaliser un TP":
         f"Groupe {groupe or 'non renseigné'} — Sous-groupe {sous_groupe or 'non renseigné'}"
     )
 
-    tp_etudiant_df = lab_tp_etudiant(etudiant_connecte, df_edt_lab)
+    tp_etudiant_df = _lab_tp_etudiant(etudiant_connecte, df_edt_lab)
 
     if tp_etudiant_df.empty:
         st.warning("Aucun TP n'est programmé pour votre promotion, votre groupe et votre sous-groupe.")
