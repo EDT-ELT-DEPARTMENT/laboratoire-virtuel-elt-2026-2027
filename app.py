@@ -1792,7 +1792,7 @@ elif espace == "🧪 Réaliser un TP":
     st.title("🧪 Mon espace de travaux pratiques")
     st.caption("Sélectionnez votre TP, réalisez le câblage, lancez la simulation, puis mesurez les grandeurs électriques.")
 
-    if not identite_complete::
+    if not identite_complete:
         st.warning("Saisissez votre matricule étudiant dans la barre latérale pour accéder à vos TP.")
         st.stop()
 
