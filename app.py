@@ -21,6 +21,19 @@ except Exception:
 
 import numpy as np
 import pandas as pd
+
+
+def _np_integrale_trapezes(valeurs, abscisses):
+    """Intégration trapézoïdale compatible avec NumPy ancien et récent."""
+    fonction = getattr(np, "trapezoid", None)
+    if fonction is None:  # Compatibilité avec les anciennes versions de NumPy.
+        fonction = getattr(np, "trapz", None)
+    if fonction is None:
+        raise RuntimeError(
+            "La version de NumPy installée ne fournit ni trapezoid ni trapz. "
+            "Mettez NumPy à jour."
+        )
+    return fonction(valeurs, abscisses)
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -609,10 +622,39 @@ def ajouter_composant_graphique(nom_composant):
         f"<div style='font-size:10px;color:#475569;margin-top:6px'>BORNES ÉLECTRIQUES</div>"
         f"<div style='margin-top:2px;line-height:1.9'>{pastilles}</div></div>"
     )
+    # Configuration par défaut des nœuds du laboratoire :
+    # - type "default" : chaque appareil possède une entrée et une sortie ;
+    # - sortie à droite et entrée à gauche : câblage lisible de gauche à droite ;
+    # - déplacement, connexion et suppression autorisés ;
+    # - largeur visuelle uniforme pour laisser apparaître le nom et les bornes.
+    donnees_noeud = {
+        "content": contenu,
+        "component": nom_composant,
+        "instance": instance,
+        "terminals": bornes,
+        "node_width": 230,
+        "node_role": "composant_electrique",
+    }
     node = StreamlitFlowNode(
-        node_id, position,
-        {"content": contenu, "component": nom_composant, "instance": instance, "terminals": bornes},
-        "default", "right", "left",
+        id=node_id,
+        pos=position,
+        data=donnees_noeud,
+        node_type="default",
+        source_position="right",
+        target_position="left",
+        draggable=True,
+        connectable=True,
+        deletable=True,
+        selectable=True,
+        style={
+            "width": "230px",
+            "minWidth": "230px",
+            "border": "1px solid #60a5fa",
+            "borderRadius": "10px",
+            "background": "#ffffff",
+            "padding": "0px",
+            "boxShadow": "0 2px 8px rgba(15, 23, 42, 0.10)",
+        },
     )
     state.nodes.append(node)
     st.session_state.circuit_graphique = state
@@ -1153,7 +1195,25 @@ elif espace == "🧩 Éditeur graphique de circuits":
 
     with col_canvas:
         st.subheader("⚙️ Zone de câblage")
-        st.caption("Glissez les appareils pour les déplacer. Reliez une poignée de sortie à une poignée d'entrée ; attribuez ensuite les bornes et la couleur de chaque fil.")
+        with st.expander("ℹ️ Configuration des nœuds", expanded=False):
+            st.markdown(
+                "- **Node Content** : nom de l'appareil, symbole et liste de ses bornes.\\n"
+                "- **Node Width** : 230 px pour afficher correctement les informations.\\n"
+                "- **Type** : `default` (entrée et sortie disponibles).\\n"
+                "- **Source Position** : `Right` (sortie à droite).\\n"
+                "- **Target Position** : `Left` (entrée à gauche).\\n"
+                "- **Draggable / Connectable / Deletable** : activés.\\n\\n"
+                "Ces réglages organisent le dessin et les connexions graphiques. "
+                "Le choix des bornes électriques et les contrôles de câblage restent "
+                "effectués dans les réglages de chaque liaison."
+            )
+        st.caption(
+            "Configuration des nœuds : largeur 230 px, type standard avec entrée à gauche "
+            "et sortie à droite. Déplacez les appareils à la souris, reliez la sortie droite "
+            "d'un appareil à l'entrée gauche d'un autre, puis choisissez les bornes réelles "
+            "et la couleur du conducteur. Le menu contextuel permet de modifier ou supprimer "
+            "un nœud ; la suppression est activée."
+        )
         st.session_state.circuit_graphique = streamlit_flow(
             "atelier_electrique_graphique",
             st.session_state.circuit_graphique,
@@ -1418,8 +1478,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
         vs = vm * np.sin(2 * np.pi * frequence * t)
         vo = np.maximum(np.abs(vs) - 2 * chute_diode, 0)
         io = vo / resistance_charge
-        u_moy = float(np.trapz(vo, t) / (t[-1] - t[0]))
-        u_eff = float(math.sqrt(np.trapz(vo**2, t) / (t[-1] - t[0])))
+        u_moy = float(_np_integrale_trapezes(vo, t) / (t[-1] - t[0]))
+        u_eff = float(math.sqrt(_np_integrale_trapezes(vo**2, t) / (t[-1] - t[0])))
         i_moy = u_moy / resistance_charge
         p_charge = u_eff**2 / resistance_charge
         ondulation = 2 * frequence
