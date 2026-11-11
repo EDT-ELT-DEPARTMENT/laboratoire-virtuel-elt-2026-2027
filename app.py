@@ -1815,7 +1815,7 @@ elif espace == "🧪 Réaliser un TP":
 
     options_tp = sorted(
         tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(),
-        key=lambda x: lab_normaliser(x)
+        key=lambda x: _lab_normaliser(x)
     )
 
     tp_choisi = st.selectbox(
