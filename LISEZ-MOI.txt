@@ -1,0 +1,26 @@
+REMPLACEMENT DES PHOTOS – LABORATOIRE VIRTUEL ELT
+
+Ce pack contient 17 images JPG générées par IA et recadrées individuellement.
+Copier les 17 fichiers à côté de app.py, à la racine du dépôt GitHub,
+en remplaçant les fichiers portant exactement les mêmes noms.
+
+Fichiers inclus :
+- amperemetre.jpg
+- amplificateur-operationnel.jpg
+- api-siemens-e-s.jpg
+- arduino-uno.jpg
+- capteur-inductif.jpg
+- capteur-optique.jpg
+- esp32.jpg
+- led.jpg
+- pont-de-diodes-graetz.jpg
+- resistance-de-puissance.jpg
+- sonde-de-temperature.jpg
+- source-de-courant-dc.jpg
+- source-de-tension-dc.jpg
+- transistor-npn.jpg
+- voltmetre.jpg
+- voyant-lumineux.jpg
+- wattmetre.jpg
+
+Les autres images du dépôt ne sont pas incluses et ne doivent pas être supprimées.
