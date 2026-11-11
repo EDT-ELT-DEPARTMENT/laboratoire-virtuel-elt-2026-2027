@@ -9,6 +9,7 @@ import io
 import math
 from datetime import datetime
 from uuid import uuid4
+from types import SimpleNamespace
 from html import escape as html_escape
 
 try:
@@ -628,7 +629,32 @@ def _paires_bornes_graphiques(state):
 
 def initialiser_circuit_graphique():
     if st.session_state.circuit_graphique is None:
-        st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
+        st.session_state.circuit_graphique = SimpleNamespace(nodes=[], edges=[])
+
+
+def supprimer_composant_graphique(component_id):
+    """Supprime un composant, ses broches et tous les fils qui y sont reliés."""
+    state = st.session_state.circuit_graphique
+    pin_ids = {
+        n.id for n in state.nodes
+        if n.data.get("node_role") == "borne" and n.data.get("component_id") == component_id
+    }
+    state.nodes = [
+        n for n in state.nodes
+        if n.id != component_id and n.id not in pin_ids
+    ]
+    edges_supprimes = [
+        e.id for e in state.edges
+        if e.source in pin_ids or e.target in pin_ids
+    ]
+    state.edges = [
+        e for e in state.edges
+        if e.source not in pin_ids and e.target not in pin_ids
+    ]
+    for edge_id in edges_supprimes:
+        st.session_state.get("bornes_par_arete", {}).pop(edge_id, None)
+        st.session_state.get("couleurs_fils_par_arete", {}).pop(edge_id, None)
+    st.session_state.resultat_solveur_dc = None
 
 
 def ajouter_composant_graphique(nom_composant):
@@ -1165,12 +1191,9 @@ elif espace == "🧰 Bibliothèque de composants":
                 st.write(fiche["utilisation"])
                 st.caption("Les valeurs chiffrées doivent être relevées sur la plaque signalétique ou la fiche constructeur du modèle réellement utilisé.")
                 if st.button("➕ Ajouter ce composant à l’éditeur", key=f"bib_add_{_slug_composant(nom)}", use_container_width=True):
-                    if not STREAMLIT_FLOW_DISPONIBLE:
-                        st.error("L'éditeur nécessite streamlit-flow-component==1.6.1.")
-                    else:
-                        initialiser_circuit_graphique()
-                        ajouter_composant_graphique(nom)
-                        st.success(f"{nom} ajouté au canevas. Ouvrez « Éditeur graphique de circuits » pour le câblage.")
+                    initialiser_circuit_graphique()
+                    ajouter_composant_graphique(nom)
+                    st.success(f"{nom} ajouté à l'atelier de câblage.")
 
 elif espace == "🧩 Éditeur graphique de circuits":
     st.title("🧩 Atelier graphique de câblage électrique")
@@ -1179,75 +1202,112 @@ elif espace == "🧩 Éditeur graphique de circuits":
         "par glisser-déposer, choisissez la couleur de chaque conducteur et vérifiez "
         "votre câblage de puissance et de commande."
     )
-    if not STREAMLIT_FLOW_DISPONIBLE:
-        st.error("Module absent : ajoutez streamlit-flow-component==1.6.1 à requirements.txt.")
-        st.stop()
-
     initialiser_circuit_graphique()
     tp_graphique = st.selectbox("TP de référence", list(TPS.keys()), key="tp_graphique_select")
     if st.session_state.tp_graphique_courant != tp_graphique:
         st.session_state.tp_graphique_courant = tp_graphique
-        st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
+        st.session_state.circuit_graphique = SimpleNamespace(nodes=[], edges=[])
         st.session_state.bornes_par_arete = {}
         st.session_state.couleurs_fils_par_arete = {}
         st.session_state.pop("dernier_resultat_graphique", None)
 
     st.info(TPS[tp_graphique]["description"])
-    col_bib, col_canvas = st.columns([1, 3], gap="large")
+    col_bib, col_canvas = st.columns([1, 2], gap="large")
     with col_bib:
-        st.subheader("🧰 Bibliothèque")
-        marque_graphique = st.selectbox("🏷️ Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_graphique")
-        st.caption("Illustrations IA pédagogiques, non contractuelles ; vérifier les bornes sur la notice du modèle réel.")
+        st.subheader("🧰 Ajouter un appareil")
+        marque_graphique = st.selectbox("🏷️ Marque", list(MARQUES_COMPOSANTS.keys()), key="marque_graphique")
         categorie_graph = st.selectbox("Catégorie", list(COMPOSANTS.keys()), key="cat_graphique")
-        recherche_graph = st.text_input("Rechercher un composant", key="recherche_composant_graph")
+        recherche_graph = st.text_input("Rechercher", key="recherche_composant_graph")
         choix_graph = [n for n in COMPOSANTS[categorie_graph] if recherche_graph.casefold() in n.casefold()]
         if not choix_graph:
-            st.warning("Aucun composant trouvé dans cette catégorie.")
+            st.warning("Aucun composant trouvé.")
             choix_graph = list(COMPOSANTS[categorie_graph])
-        composant_graph = st.selectbox("Composant", choix_graph, key="composant_graphique")
+        composant_graph = st.selectbox("Composant à ajouter", choix_graph, key="composant_graphique")
         fiche_graph = fiche_composant(composant_graph, categorie_graph, COMPOSANTS[categorie_graph][composant_graph], marque_graphique)
         afficher_photo_composant(composant_graph, fiche_graph)
-        st.caption(f"Symbole : {fiche_graph['symbole']}")
-        if st.button("➕ Placer dans le circuit", use_container_width=True):
+        st.caption(f"Bornes : {', '.join(COMPOSANTS[categorie_graph][composant_graph])}")
+        if st.button("➕ Ajouter à la zone de montage", use_container_width=True):
             ajouter_composant_graphique(composant_graph)
             st.rerun()
         st.divider()
-        st.caption("Composants attendus pour ce TP")
+        st.caption("Appareils requis pour ce TP")
         for item in TPS[tp_graphique]["composants"]:
             st.write(f"• {item}")
-        if st.button("🗑️ Réinitialiser le canevas", use_container_width=True):
-            st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
+        if st.button("🗑️ Réinitialiser le montage", use_container_width=True):
+            st.session_state.circuit_graphique = SimpleNamespace(nodes=[], edges=[])
             st.session_state.bornes_par_arete = {}
             st.session_state.couleurs_fils_par_arete = {}
             st.session_state.pop("dernier_resultat_graphique", None)
+            st.session_state.resultat_solveur_dc = None
             st.rerun()
 
     with col_canvas:
-        st.subheader("⚙️ Zone de câblage")
-        with st.expander("ℹ️ Configuration des nœuds", expanded=False):
-            st.markdown(
-                "- **Node Content** : nom de l'appareil, symbole et liste de ses bornes.\\n"
-                "- **Node Width** : 230 px pour afficher correctement les informations.\\n"
-                "- **Type** : `default` (entrée et sortie disponibles).\\n"
-                "- **Source Position** : `Right` (sortie à droite).\\n"
-                "- **Target Position** : `Left` (entrée à gauche).\\n"
-                "- **Draggable / Connectable / Deletable** : activés.\\n\\n"
-                "Chaque broche affichée est un nœud connectable distinct : le fil mémorise "
-                "automatiquement l'identifiant de la borne de départ et celui de la borne d'arrivée."
-            )
-        st.caption(
-            "Chaque borne est un point graphique indépendant. Reliez directement une broche "
-            "bleue à une autre broche bleue ; le nom des deux bornes est détecté automatiquement. "
-            "Les cartes de composants et les broches peuvent être déplacées séparément."
-        )
-        st.session_state.circuit_graphique = streamlit_flow(
-            "atelier_electrique_graphique",
-            st.session_state.circuit_graphique,
-            height=590, fit_view=True, show_minimap=True,
-            hide_watermark=True, allow_new_edges=True,
-            enable_node_menu=True, enable_edge_menu=True, enable_pane_menu=True,
-            get_node_on_click=True, get_edge_on_click=True, min_zoom=0.15,
-        )
+        st.subheader("🧩 Zone de montage")
+        composants_places = [n for n in st.session_state.circuit_graphique.nodes if n.data.get("node_role") == "composant"]
+        if not composants_places:
+            st.info("Ajoutez un premier appareil depuis la bibliothèque à gauche.")
+        else:
+            st.caption("Les appareils ajoutés apparaissent ci-dessous avec leur nom et leurs bornes.")
+            grille = st.columns(2)
+            for idx, node in enumerate(composants_places):
+                with grille[idx % 2]:
+                    st.markdown(f"**{node.data.get('instance', node.data.get('component'))}**")
+                    st.caption("Bornes : " + " · ".join(node.data.get("terminals", [])))
+                    st.button("Retirer", key=f"remove_component_{node.id}",
+                              on_click=lambda nid=node.id: supprimer_composant_graphique(nid))
+        st.divider()
+        st.subheader("🔌 Réaliser une liaison")
+        composants_places = [n for n in st.session_state.circuit_graphique.nodes if n.data.get("node_role") == "composant"]
+        if len(composants_places) >= 2:
+            labels = {n.id: f"{n.data.get('instance')} — {n.data.get('component')}" for n in composants_places}
+            choix_ids = list(labels.keys())
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Composant 1**")
+                comp_a = st.selectbox("Appareil de départ", choix_ids, format_func=lambda x: labels[x], key="pair_comp_a")
+                na = next(n for n in composants_places if n.id == comp_a)
+                fiche_a = fiche_composant(na.data["component"],
+                    next((cat for cat, items in COMPOSANTS.items() if na.data["component"] in items), ""),
+                    na.data["terminals"], marque_graphique)
+                afficher_photo_composant(na.data["component"], fiche_a)
+                borne_a = st.selectbox("Choisir sa borne", na.data["terminals"], key=f"pair_terminal_a_{comp_a}")
+            with c2:
+                st.markdown("**Composant 2**")
+                ids_b = [x for x in choix_ids if x != comp_a]
+                comp_b = st.selectbox("Appareil d'arrivée", ids_b, format_func=lambda x: labels[x], key="pair_comp_b")
+                nb = next(n for n in composants_places if n.id == comp_b)
+                fiche_b = fiche_composant(nb.data["component"],
+                    next((cat for cat, items in COMPOSANTS.items() if nb.data["component"] in items), ""),
+                    nb.data["terminals"], marque_graphique)
+                afficher_photo_composant(nb.data["component"], fiche_b)
+                borne_b = st.selectbox("Choisir sa borne", nb.data["terminals"], key=f"pair_terminal_b_{comp_b}")
+            st.caption(f"Liaison à créer : **{na.data.get('instance')}.{borne_a} ↔ {nb.data.get('instance')}.{borne_b}**")
+            if st.button("➕ Ajouter ce fil", type="primary", use_container_width=True):
+                pins = {
+                    (n.data.get("component_id"), n.data.get("terminal")): n.id
+                    for n in st.session_state.circuit_graphique.nodes
+                    if n.data.get("node_role") == "borne"
+                }
+                pin_a, pin_b = pins.get((comp_a, borne_a)), pins.get((comp_b, borne_b))
+                if not pin_a or not pin_b:
+                    st.error("Impossible de retrouver une des deux bornes graphiques.")
+                elif any(
+                    {e.source, e.target} == {pin_a, pin_b}
+                    for e in st.session_state.circuit_graphique.edges
+                ):
+                    st.warning("Cette liaison existe déjà.")
+                else:
+                    edge_id = f"wire_{uuid4().hex[:10]}"
+                    st.session_state.circuit_graphique.edges.append(
+                        SimpleNamespace(id=edge_id, source=pin_a, target=pin_b)
+                    )
+                    st.session_state.bornes_par_arete[edge_id] = (borne_a, borne_b)
+                    st.session_state.couleurs_fils_par_arete[edge_id] = _couleur_initiale_fil(borne_a, borne_b)
+                    st.session_state.resultat_solveur_dc = None
+                    st.success("Fil ajouté au montage.")
+                    st.rerun()
+        else:
+            st.info("Ajoutez au moins deux appareils pour commencer le câblage.")
 
     state_graph = st.session_state.circuit_graphique
     edge_ids = {edge.id for edge in state_graph.edges}
@@ -1257,30 +1317,42 @@ elif espace == "🧩 Éditeur graphique de circuits":
 
     # Les bornes sont maintenant déterminées par les broches graphiques réellement reliées.
     st.session_state.bornes_par_arete = _paires_bornes_graphiques(state_graph)
-    st.subheader("🔌 Connexions broche à broche")
-    if not state_graph.nodes:
-        st.warning("Le canevas est vide : placez les composants à gauche.")
-    elif not state_graph.edges:
-        st.info("Aucun fil : reliez directement deux broches bleues dans le canevas.")
+    st.subheader("🔌 Fils installés")
+    if not state_graph.edges:
+        st.info("Aucun fil installé. Choisissez un appareil, sa borne, puis le deuxième appareil et sa borne.")
     else:
         nodes_edge = {n.id: n for n in state_graph.nodes}
+        fils_a_supprimer = []
         for edge in state_graph.edges:
             info = _infos_borne_arete(state_graph, edge)
-            if not info: continue
+            if not info:
+                continue
             ca, ba, cb, bb = info
             na, nb = nodes_edge.get(ca), nodes_edge.get(cb)
             if not na or not nb or not ba or not bb:
-                st.warning("Ancienne liaison sans broches : supprimez-la et recréez le fil entre deux broches.")
+                st.warning("Liaison incomplète : supprimez ce fil et recommencez.")
                 continue
-            st.markdown(f"**{na.data.get('instance')}.{ba}  ↔  {nb.data.get('instance')}.{bb}**")
-            choix = st.session_state.bornes_par_arete.get(edge.id, (ba, bb))
-            couleur_defaut = st.session_state.couleurs_fils_par_arete.get(edge.id, _couleur_initiale_fil(*choix))
-            options_couleur = list(COULEURS_FILS.keys())
-            couleur = st.selectbox("Couleur / fonction du conducteur", options_couleur,
-                index=options_couleur.index(couleur_defaut) if couleur_defaut in options_couleur else 0,
-                key=f"wire_color_{edge.id}")
-            st.session_state.couleurs_fils_par_arete[edge.id] = couleur
-            st.divider()
+            ligne_fil, action_fil = st.columns([5, 1])
+            with ligne_fil:
+                st.markdown(f"**{na.data.get('instance')}.{ba}  ↔  {nb.data.get('instance')}.{bb}**")
+                choix = st.session_state.bornes_par_arete.get(edge.id, (ba, bb))
+                couleur_defaut = st.session_state.couleurs_fils_par_arete.get(edge.id, _couleur_initiale_fil(*choix))
+                options_couleur = list(COULEURS_FILS.keys())
+                couleur = st.selectbox("Couleur du fil", options_couleur,
+                    index=options_couleur.index(couleur_defaut) if couleur_defaut in options_couleur else 0,
+                    key=f"wire_color_{edge.id}")
+                st.session_state.couleurs_fils_par_arete[edge.id] = couleur
+            with action_fil:
+                st.write("")
+                if st.button("✖", key=f"remove_wire_{edge.id}", help="Supprimer ce fil"):
+                    fils_a_supprimer.append(edge.id)
+        if fils_a_supprimer:
+            state_graph.edges = [e for e in state_graph.edges if e.id not in fils_a_supprimer]
+            for edge_id in fils_a_supprimer:
+                st.session_state.bornes_par_arete.pop(edge_id, None)
+                st.session_state.couleurs_fils_par_arete.pop(edge_id, None)
+            st.session_state.resultat_solveur_dc = None
+            st.rerun()
 
     if state_graph.edges:
         st.subheader("🎨 Visualisation des conducteurs réels")
