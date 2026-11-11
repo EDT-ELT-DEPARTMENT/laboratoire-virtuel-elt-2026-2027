@@ -9,6 +9,8 @@ import io
 import math
 import base64
 import mimetypes
+import os
+import hmac
 from datetime import datetime
 from uuid import uuid4
 from html import escape as html_escape
@@ -287,18 +289,53 @@ MARQUES_COMPOSANTS = {
 
 
 def _chemin_photo_composant(nom, marque="Schneider Electric"):
-    """Retourne l'image de marque si disponible, sinon l'image générique racine."""
-    nom_fichier = f"{_slug_composant(nom)}.jpg"
+    """Recherche une photo d'abord à la racine du dépôt, quel que soit son format.
+
+    Les noms sont comparés après normalisation : espaces, tirets, accents et
+    underscores sont donc équivalents. Les sous-dossiers de marque restent
+    acceptés en solution de repli pour préserver la compatibilité.
+    """
+    slug = _slug_composant(nom)
     dossier_marque = MARQUES_COMPOSANTS.get(marque, "schneider-electric")
-    candidats = [
-        DOSSIER_PHOTOS_COMPOSANTS / dossier_marque / nom_fichier,
-        DOSSIER_PHOTOS_RACINE / nom_fichier,
-    ]
-    for chemin in candidats:
+    extensions = (".jpg", ".jpeg", ".png", ".webp", ".JPG", ".JPEG", ".PNG", ".WEBP")
+
+    # 1) Fichiers placés directement à côté de app.py : emplacement du dépôt.
+    for extension in extensions:
+        chemin = DOSSIER_PHOTOS_RACINE / f"{slug}{extension}"
         if chemin.is_file():
             return chemin
-    # Conserver le chemin de marque comme cible attendue pour le message d'aide.
-    return candidats[0]
+
+    # 2) Recherche par nom normalisé à la racine : accepte par exemple
+    #    "Moteur asynchrone triphasé.PNG" ou "moteur_asynchrone_triphasé.jpg".
+    try:
+        fichiers_racine = [f for f in DOSSIER_PHOTOS_RACINE.iterdir()
+                           if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")]
+    except OSError:
+        fichiers_racine = []
+
+    correspondances = []
+    for fichier in fichiers_racine:
+        nom_image = _slug_composant(fichier.stem)
+        if nom_image == slug:
+            correspondances.append((0, fichier))
+        elif len(slug) >= 7 and (slug in nom_image or nom_image in slug):
+            # Tolère un suffixe/prefixe descriptif dans le nom de l'image,
+            # sans sélectionner des noms très courts et ambigus.
+            correspondances.append((abs(len(nom_image) - len(slug)), fichier))
+    if correspondances:
+        correspondances.sort(key=lambda element: (element[0], element[1].name.lower()))
+        return correspondances[0][1]
+
+    # 3) Compatibilité : anciennes images rangées dans le dossier de marque.
+    dossier_marque_path = DOSSIER_PHOTOS_COMPOSANTS / dossier_marque
+    for extension in extensions:
+        chemin = dossier_marque_path / f"{slug}{extension}"
+        if chemin.is_file():
+            return chemin
+
+    # Chemin attendu conservé pour permettre au reste de l'interface d'afficher
+    # un message explicatif si aucune illustration n'existe.
+    return DOSSIER_PHOTOS_RACINE / f"{slug}.jpg"
 
 DESCRIPTIONS_COMPOSANTS = {
     "Moteur asynchrone triphasé": ("Convertit l'énergie électrique triphasée en énergie mécanique par induction électromagnétique.", "Moteur triphasé", "Plaque signalétique : tension, couplage Δ/Y, puissance, courant, fréquence, cos φ, rendement et vitesse.", "U1, V1, W1 : début des enroulements ; U2, V2, W2 : fins ; PE : terre de protection.", "Entraînement de pompes, ventilateurs, convoyeurs et machines industrielles."),
@@ -377,8 +414,9 @@ def afficher_photo_composant(nom, fiche, width=None):
         dossier_marque = MARQUES_COMPOSANTS.get(fiche["marque"], "schneider-electric")
         st.info(
             f"Aucune illustration IA disponible pour **{nom}**. "
-            f"Le simulateur a recherché `{_slug_composant(nom)}.jpg` à la racine du dépôt "
-            f"et dans `assets/composants/{dossier_marque}/`. "
+            f"Le simulateur a recherché une image nommée comme `{_slug_composant(nom)}` "
+            "(JPG, JPEG, PNG ou WEBP) directement à la racine du dépôt, "
+            f"puis dans `assets/composants/{dossier_marque}/`. "
             "Ajoutez l'image à l'un de ces emplacements. "
             "Les images sont des illustrations pédagogiques IA non contractuelles : "
             "elles ne représentent pas un modèle commercial exact du fabricant sélectionné."
@@ -460,6 +498,8 @@ for key, default in {
     "bornes_par_arete": {},
     "couleurs_fils_par_arete": {},
     "tp_graphique_courant": None,
+    "enseignant_authentifie": False,
+    "reference_chargee_enseignant": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
@@ -652,6 +692,73 @@ def charger_composants_du_tp_graphique(nom_tp, marque="Schneider Electric"):
     st.session_state.bornes_par_arete = {}
     st.session_state.couleurs_fils_par_arete = {}
     st.session_state.pop("dernier_resultat_graphique", None)
+
+
+def construire_circuit_reference_enseignant(nom_tp, marque="Schneider Electric"):
+    """Construit le canevas de référence pré-câblé, réservé à l'enseignant."""
+    if not STREAMLIT_FLOW_DISPONIBLE:
+        return None, {}
+    # Sauvegarde le canevas étudiant : le corrigé enseignant ne doit jamais
+    # remplacer ni révéler les fils dans l'éditeur utilisé par les étudiants.
+    ancien_circuit = st.session_state.get("circuit_graphique")
+    anciennes_bornes = st.session_state.get("bornes_par_arete", {})
+    anciennes_couleurs = st.session_state.get("couleurs_fils_par_arete", {})
+    state = StreamlitFlowState(nodes=[], edges=[])
+    st.session_state.circuit_graphique = state
+    st.session_state.bornes_par_arete = {}
+    st.session_state.couleurs_fils_par_arete = {}
+    charger_composants_du_tp_graphique(nom_tp, marque=marque)
+    state = st.session_state.circuit_graphique
+    bornes_reference = dict(st.session_state.bornes_par_arete)
+    couleurs_reference = dict(st.session_state.couleurs_fils_par_arete)
+    st.session_state.circuit_graphique = ancien_circuit
+    st.session_state.bornes_par_arete = anciennes_bornes
+    st.session_state.couleurs_fils_par_arete = anciennes_couleurs
+
+    # Indexe chaque broche par le nom du composant et le nom de la borne.
+    index_broches = {}
+    for node in state.nodes:
+        data = node.data or {}
+        if data.get("node_role") == "borne":
+            index_broches[(data.get("component"), data.get("terminal"))] = node.id
+        elif data.get("node_role") == "composant":
+            # Le canevas enseignant est consultatif : aucun déplacement/suppression.
+            try:
+                node.draggable = False
+                node.deletable = False
+            except Exception:
+                pass
+    for liaison in TPS[nom_tp].get("liaisons", []):
+        try:
+            gauche, droite = liaison
+            comp_a, borne_a = gauche.rsplit(".", 1)
+            comp_b, borne_b = droite.rsplit(".", 1)
+            source = index_broches.get((comp_a, borne_a))
+            target = index_broches.get((comp_b, borne_b))
+            if not source or not target:
+                continue
+            edge_id = f"ref_{uuid4().hex[:12]}"
+            state.edges.append(StreamlitFlowEdge(
+                id=edge_id, source=source, target=target,
+                animated=False, label="", style={"stroke": "#16A34A", "strokeWidth": 3},
+            ))
+            st.session_state.bornes_par_arete[edge_id] = (borne_a, borne_b)
+            st.session_state.couleurs_fils_par_arete[edge_id] = _couleur_initiale_fil(borne_a, borne_b)
+        except Exception:
+            # Une liaison mal définie dans TPS ne doit pas faire planter l'espace enseignant.
+            continue
+    return state, bornes_reference
+
+
+def obtenir_mot_de_passe_enseignant():
+    """Lit le secret depuis Streamlit Secrets ou la variable d'environnement."""
+    try:
+        valeur = st.secrets.get("mot_de_passe_enseignant", "")
+        if valeur:
+            return str(valeur)
+    except Exception:
+        pass
+    return os.environ.get("LAB_ENSEIGNANT_PASSWORD", "")
 
 
 def ajouter_composant_graphique(nom_composant, marque="Schneider Electric"):
@@ -1992,12 +2099,67 @@ elif espace == "📈 Mesures réelles & comparaison":
             st.info("Vérifiez le format, les en-têtes et l'absence de fichier protégé par mot de passe.")
 
 elif espace == "👨‍🏫 Espace enseignant":
-    st.title("👨‍🏫 Espace enseignant")
-    st.warning(
-        "Cette première version n'intègre pas encore d'authentification enseignant. "
-        "Ne publiez pas de corrigés confidentiels dans cette page avant l'ajout d'un contrôle d'accès."
-    )
-    st.subheader("Résultats de la session actuelle")
+    st.title("👨‍🏫 Espace enseignant — corrigés de câblage")
+    mot_de_passe_configure = obtenir_mot_de_passe_enseignant()
+    if not mot_de_passe_configure:
+        st.error("L'accès enseignant n'est pas encore configuré. Définissez le secret mot_de_passe_enseignant dans Streamlit Cloud → Settings → Secrets.")
+        st.code('mot_de_passe_enseignant = "VotreMotDePasseFort"', language="toml")
+        st.stop()
+
+    if not st.session_state.get("enseignant_authentifie", False):
+        st.info("Cet espace contient les montages de référence entièrement câblés. Il est réservé aux enseignants.")
+        mdp_saisi = st.text_input("Mot de passe enseignant", type="password", key="mdp_enseignant_saisi")
+        if st.button("🔐 Accéder à l'espace enseignant", type="primary", use_container_width=True):
+            if hmac.compare_digest(mdp_saisi, mot_de_passe_configure):
+                st.session_state.enseignant_authentifie = True
+                st.rerun()
+            else:
+                st.error("Mot de passe incorrect.")
+        st.stop()
+
+    entete1, entete2 = st.columns([4, 1])
+    with entete1:
+        st.success("Accès enseignant autorisé")
+    with entete2:
+        if st.button("🔒 Se déconnecter", use_container_width=True):
+            st.session_state.enseignant_authentifie = False
+            st.session_state.pop("mdp_enseignant_saisi", None)
+            st.rerun()
+
+    st.subheader("🧪 TP simulés — câblages de référence")
+    st.caption("Sélectionnez une manipulation pour consulter le montage complet, avec tous les composants et les conducteurs déjà reliés selon le corrigé enregistré dans TPS.")
+    tp_reference_enseignant = st.selectbox("Manipulation / TP", list(TPS.keys()), key="tp_reference_enseignant")
+    marque_reference = st.selectbox("Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_reference_enseignant")
+    cle_reference = f"{tp_reference_enseignant}|{marque_reference}"
+    if st.session_state.get("reference_chargee_enseignant") != cle_reference:
+        circuit_ref, bornes_ref = construire_circuit_reference_enseignant(tp_reference_enseignant, marque_reference)
+        st.session_state.circuit_reference_enseignant = circuit_ref
+        st.session_state.bornes_reference_enseignant = bornes_ref
+        st.session_state.reference_chargee_enseignant = cle_reference
+    st.write(TPS[tp_reference_enseignant]["description"])
+    if STREAMLIT_FLOW_DISPONIBLE:
+        st.markdown("**Montage de référence pré-câblé**")
+        st.session_state.circuit_graphique = streamlit_flow(
+            f"circuit_reference_enseignant_{_slug_composant(tp_reference_enseignant)}",
+            st.session_state.circuit_reference_enseignant,
+            height=650, fit_view=True, show_minimap=True,
+            hide_watermark=True, allow_new_edges=False,
+            enable_node_menu=False, enable_edge_menu=False, enable_pane_menu=False,
+            get_node_on_click=False, get_edge_on_click=False, min_zoom=0.15,
+        )
+        st.markdown("**Liste détaillée des connexions de référence**")
+        lignes_reference = []
+        for a, b in TPS[tp_reference_enseignant].get("liaisons", []):
+            lignes_reference.append({"Borne de départ": a, "Borne d'arrivée": b, "Conducteur": _couleur_initiale_fil(a, b)})
+        if lignes_reference:
+            st.dataframe(pd.DataFrame(lignes_reference), use_container_width=True, hide_index=True)
+        else:
+            st.warning("Aucune liaison de référence n'est définie pour ce TP.")
+    else:
+        st.error("Le visualiseur graphique nécessite streamlit-flow-component==1.6.1.")
+
+    st.divider()
+    st.subheader("📊 Résultats de la session actuelle")
     if st.session_state.historique:
         historique = pd.DataFrame(st.session_state.historique)
         st.dataframe(historique, use_container_width=True, hide_index=True)
