@@ -276,6 +276,9 @@ COMPOSANTS = {
 # Les valeurs nominales dépendent de la référence exacte du fabricant :
 # elles ne sont volontairement pas inventées lorsqu'elles ne sont pas connues.
 # ---------------------------------------------------------------------
+# Les illustrations génériques sont déposées directement à la racine du dépôt
+# GitHub (à côté de app.py). Les illustrations propres à une marque, si elles
+# existent, restent prioritaires dans assets/composants/<marque>/.
 DOSSIER_PHOTOS_COMPOSANTS = BASE_DIR_LAB / "assets" / "composants"
 DOSSIER_PHOTOS_RACINE = BASE_DIR_LAB
 MARQUES_COMPOSANTS = {
@@ -316,6 +319,8 @@ def _chemin_photo_composant(nom, marque="Schneider Electric"):
         if nom_image == slug:
             correspondances.append((0, fichier))
         elif len(slug) >= 7 and (slug in nom_image or nom_image in slug):
+            # Tolère un suffixe/prefixe descriptif dans le nom de l'image,
+            # sans sélectionner des noms très courts et ambigus.
             correspondances.append((abs(len(nom_image) - len(slug)), fichier))
     if correspondances:
         correspondances.sort(key=lambda element: (element[0], element[1].name.lower()))
@@ -328,13 +333,15 @@ def _chemin_photo_composant(nom, marque="Schneider Electric"):
         if chemin.is_file():
             return chemin
 
+    # Chemin attendu conservé pour permettre au reste de l'interface d'afficher
+    # un message explicatif si aucune illustration n'existe.
     return DOSSIER_PHOTOS_RACINE / f"{slug}.jpg"
 
 DESCRIPTIONS_COMPOSANTS = {
     "Moteur asynchrone triphasé": ("Convertit l'énergie électrique triphasée en énergie mécanique par induction électromagnétique.", "Moteur triphasé", "Plaque signalétique : tension, couplage Δ/Y, puissance, courant, fréquence, cos φ, rendement et vitesse.", "U1, V1, W1 : début des enroulements ; U2, V2, W2 : fins ; PE : terre de protection.", "Entraînement de pompes, ventilateurs, convoyeurs et machines industrielles."),
     "Transformateur monophasé": ("Transfère l'énergie alternative entre deux circuits par induction électromagnétique.", "Transformateur", "Plaque : puissances apparente (VA), tensions primaire/secondaire, fréquence et courant nominal.", "P1-P2 : primaire ; S1-S2 : secondaire.", "Adaptation de tension, isolation galvanique et alimentation de montages."),
     "Contacteur KM1": ("Appareil électromécanique commandé par une bobine permettant d'établir ou couper un circuit de puissance.", "Contacteur", "Tension bobine A1-A2, tension assignée, courant d'emploi, catégorie d'emploi (ex. AC-3) et nombre de pôles selon référence.", "L1/L2/L3 : arrivée ; T1/T2/T3 : départ ; A1/A2 : bobine ; 13-14 : auxiliaire NO.", "Commande fréquente de moteurs et de charges électriques."),
-    "Relais thermique": ("Protège un moteur contre les surcharges prolongées en détectant l'échéchauffement lié au courant.", "Relais thermique", "Plage de réglage en ampères, classe de déclenchement, tension/courant des contacts auxiliaires selon référence.", "L1/L2/L3 : entrée ; T1/T2/T3 : sortie ; 95-96 : contact NF de défaut.", "Protection contre les surcharges moteur, généralement associé à un contacteur."),
+    "Relais thermique": ("Protège un moteur contre les surcharges prolongées en détectant l'échauffement lié au courant.", "Relais thermique", "Plage de réglage en ampères, classe de déclenchement, tension/courant des contacts auxiliaires selon référence.", "L1/L2/L3 : entrée ; T1/T2/T3 : sortie ; 95-96 : contact NF de défaut.", "Protection contre les surcharges moteur, généralement associé à un contacteur."),
     "Pont de diodes (Graetz)": ("Redresse une tension alternative monophasée en tension continue ondulée.", "Pont redresseur", "Tension inverse répétitive, courant moyen admissible, courant de surcharge et chute directe selon référence.", "AC1-AC2 : entrée alternative ; DC+ et DC- : sortie continue.", "Alimentations continues et redresseurs monophasés."),
     "Diode de puissance": ("Laisse principalement passer le courant dans le sens anode vers cathode et bloque en sens inverse.", "Diode", "Courant direct, tension inverse répétitive, chute directe et courant de surtension selon référence.", "Anode (A) et cathode (K, côté bague sur diode axiale).", "Redressement, roue libre et protection contre les inversions de polarité."),
     "Résistance": ("Limite le courant et crée une chute de tension selon la loi d'Ohm.", "Résistance", "Valeur en ohms, tolérance, puissance dissipable et tension maximale selon référence.", "Deux bornes non polarisées A et B.", "Limitation de courant, diviseur de tension et polarisation."),
@@ -349,7 +356,7 @@ DESCRIPTIONS_COMPOSANTS = {
     "ESP32": ("Microcontrôleur avec connectivité sans fil intégrée pour systèmes embarqués.", "Carte ESP32", "Modèle de module, alimentation 3,3 V, limites GPIO, Wi-Fi/Bluetooth selon datasheet.", "3V3, GND et GPIO ; les entrées ne sont généralement pas tolérantes au 5 V.", "Objets connectés, commande et mesure."),
     "API Siemens (E/S)": ("Automate programmable industriel assurant le traitement logique des entrées et sorties.", "Automate programmable", "Référence CPU/module, tension d'alimentation, type d'E/S, courant par voie et protocole selon modèle.", "L+/M : alimentation ; I : entrées ; Q : sorties.", "Automatisation de procédés et commande de machines."),
 }
-
+# Fallback fiches by type/category
 def _fiche_generique(nom, categorie):
     if "mesure" in categorie.lower() or nom in ("Voltmètre", "Ampèremètre", "Multimètre", "Oscilloscope", "Wattmètre", "Tachymètre"):
         return ("Instrument destiné à mesurer ou observer une grandeur électrique ou mécanique.", "Instrument de mesure", "Plage, précision, catégorie de sécurité et bande passante selon modèle.", "Bornes d'entrée et référence indiquées sur l'appareil ; respecter les catégories de mesure.", "Contrôle, diagnostic et caractérisation expérimentale.")
@@ -437,6 +444,8 @@ TPS = {
             ("Relais thermique.T1", "Moteur asynchrone triphasé.U1"),
             ("Relais thermique.T2", "Moteur asynchrone triphasé.V1"),
             ("Relais thermique.T3", "Moteur asynchrone triphasé.W1"),
+            # Chaîne de commande simplifiée : arrêt d'urgence + arrêt + thermique
+            # puis bouton marche et auto-maintien par le contact auxiliaire KM1.
             ("Disjoncteur tripolaire.L1", "Arrêt d'urgence NF.11"),
             ("Arrêt d'urgence NF.12", "Bouton poussoir NF.11"),
             ("Bouton poussoir NF.12", "Relais thermique.95"),
@@ -625,6 +634,8 @@ def corriger_montage(tp_nom, composants_choisis, liaisons_saisies):
     }
 
 
+
+
 def _infos_borne_arete(state, edge):
     """Retourne (id_composant_source, borne_source, id_composant_cible, borne_cible)."""
     nodes = {n.id: n for n in state.nodes}
@@ -634,6 +645,7 @@ def _infos_borne_arete(state, edge):
     da, db = a.data or {}, b.data or {}
     if da.get("node_role") == "borne" and db.get("node_role") == "borne":
         return da.get("component_id"), da.get("terminal"), db.get("component_id"), db.get("terminal")
+    # Compatibilité avec les anciens canevas où le fil reliait directement les blocs.
     ancienne_paire = st.session_state.get("bornes_par_arete", {}).get(edge.id)
     if ancienne_paire and len(ancienne_paire) == 2:
         return edge.source, ancienne_paire[0], edge.target, ancienne_paire[1]
@@ -656,19 +668,24 @@ def _paires_bornes_graphiques(state):
             resultat[edge.id] = st.session_state.get("bornes_par_arete", {}).get(edge.id)
     return resultat
 
-
 def initialiser_circuit_graphique():
     if st.session_state.circuit_graphique is None:
         st.session_state.circuit_graphique = StreamlitFlowState(nodes=[], edges=[])
 
 
 def charger_composants_du_tp_graphique(nom_tp, marque="Schneider Electric"):
-    """Place automatiquement dans le canevas tous les appareils requis par le TP."""
+    """Place automatiquement dans le canevas tous les appareils requis par le TP.
+
+    Les composants sont chargés sans aucune liaison : le câblage reste entièrement
+    à réaliser par l'étudiant.
+    """
     tp = TPS.get(nom_tp, {})
     composants_tp = tp.get("composants", [])
     if not composants_tp:
         return
 
+    # Une sélection de TP repart toujours d'un canevas propre. On conserve l'ordre
+    # pédagogique défini dans TPS pour obtenir une disposition stable.
     for nom in composants_tp:
         ajouter_composant_graphique(nom, marque=marque)
 
@@ -681,6 +698,8 @@ def construire_circuit_reference_enseignant(nom_tp, marque="Schneider Electric")
     """Construit le canevas de référence pré-câblé, réservé à l'enseignant."""
     if not STREAMLIT_FLOW_DISPONIBLE:
         return None, {}
+    # Sauvegarde le canevas étudiant : le corrigé enseignant ne doit jamais
+    # remplacer ni révéler les fils dans l'éditeur utilisé par les étudiants.
     ancien_circuit = st.session_state.get("circuit_graphique")
     anciennes_bornes = st.session_state.get("bornes_par_arete", {})
     anciennes_couleurs = st.session_state.get("couleurs_fils_par_arete", {})
@@ -696,12 +715,14 @@ def construire_circuit_reference_enseignant(nom_tp, marque="Schneider Electric")
     st.session_state.bornes_par_arete = anciennes_bornes
     st.session_state.couleurs_fils_par_arete = anciennes_couleurs
 
+    # Indexe chaque broche par le nom du composant et le nom de la borne.
     index_broches = {}
     for node in state.nodes:
         data = node.data or {}
         if data.get("node_role") == "borne":
             index_broches[(data.get("component"), data.get("terminal"))] = node.id
         elif data.get("node_role") == "composant":
+            # Le canevas enseignant est consultatif : aucun déplacement/suppression.
             try:
                 node.draggable = False
                 node.deletable = False
@@ -724,6 +745,7 @@ def construire_circuit_reference_enseignant(nom_tp, marque="Schneider Electric")
             st.session_state.bornes_par_arete[edge_id] = (borne_a, borne_b)
             st.session_state.couleurs_fils_par_arete[edge_id] = _couleur_initiale_fil(borne_a, borne_b)
         except Exception:
+            # Une liaison mal définie dans TPS ne doit pas faire planter l'espace enseignant.
             continue
     return state, bornes_reference
 
@@ -749,10 +771,12 @@ def ajouter_composant_graphique(nom_composant, marque="Schneider Electric"):
     node_id = f"cmp_{uuid4().hex[:10]}"
     numero = 1 + sum(1 for n in state.nodes if n.data.get("node_role") == "composant" and n.data.get("component") == nom_composant)
     instance = f"{nom_composant} #{numero}"
+    # Disposition en grille : la carte est à gauche, ses broches individuelles à droite.
     nb_composants = sum(1 for n in state.nodes if n.data.get("node_role") == "composant")
     x0 = 80 + (nb_composants % 2) * 650
     y0 = 60 + (nb_composants // 2) * 620
-
+    # Intégrer la photographie dans la carte React Flow elle-même (data URI),
+    # afin qu'elle reste visible dans le canevas sans dépendre d'une URL externe.
     fiche = fiche_composant(nom_composant, "", bornes, marque)
     chemin_photo = fiche.get("photo")
     image_html = (
@@ -791,7 +815,8 @@ def ajouter_composant_graphique(nom_composant, marque="Schneider Electric"):
                "background": "#ffffff", "padding": "0px", "boxShadow": "0 2px 8px rgba(15,23,42,.10)"},
     )
     state.nodes.append(card)
-
+    # Chaque broche est un vrai nœud React Flow indépendant, donc chaque fil part
+    # précisément de la borne sélectionnée sur le canevas.
     for i, borne in enumerate(bornes):
         pin_id = f"pin_{uuid4().hex[:10]}"
         pin_html = (
@@ -811,6 +836,12 @@ def ajouter_composant_graphique(nom_composant, marque="Schneider Electric"):
     st.session_state.circuit_graphique = state
 
 
+
+# ---------------------------------------------------------------------
+# CÂBLAGE INDUSTRIEL : CONVENTIONS DE COULEURS ET SCHÉMA COLORÉ
+# Les couleurs sont pédagogiques et doivent être adaptées au règlement
+# de câblage et à la norme adoptés dans l'établissement.
+# ---------------------------------------------------------------------
 COULEURS_FILS = {
     "Phase L1/L2/L3 — noir": {"hex": "#202124", "type": "phase"},
     "Phase — marron": {"hex": "#8B4513", "type": "phase"},
@@ -936,9 +967,17 @@ def analyser_circuit_graphique(tp_nom, state, bornes_par_arete):
 
 # ---------------------------------------------------------------------
 # SOLVEUR DC : ANALYSE NODALE MODIFIÉE (MNA)
+# Modèles permanents : R, sources, diodes à seuil, bobines, enroulements moteurs
+# simplifiés et contacts commutés. Les fils idéaux fusionnent les broches connectées.
 # ---------------------------------------------------------------------
 def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
-    """Solveur MNA DC permanent : R, sources, bobines, moteurs simplifiés, contacts et diodes idéalisées."""
+    """Solveur MNA DC permanent : R, sources, bobines, moteurs simplifiés, contacts et diodes idéalisées.
+
+    Condensateur : circuit ouvert en régime permanent DC.
+    Inductance : court-circuit idéal en régime permanent DC (sa résistance série peut être renseignée).
+    Moteur : trois enroulements résistifs indépendants ; pas de FEM de rotation ni de dynamique mécanique.
+    Diode : modèle à seuil constant (0,7 V par défaut), commutation itérative.
+    """
     nodes = {n.id: n for n in state.nodes}
     composants = {n.id: n for n in state.nodes if n.data.get("node_role") == "composant"}
     parent = {}
@@ -960,6 +999,7 @@ def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
             if ca in composants and cb in composants and ba and bb:
                 union(term(ca, ba), term(cb, bb))
 
+    # Les liaisons internes des composants idéalisés sont des courts-circuits fermés.
     for cid, node in composants.items():
         typ = node.data.get("component")
         par = parametres.get(cid, {})
@@ -1019,8 +1059,11 @@ def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
         elif typ == "Condensateur":
             passive_open.append({"id":cid,"nom":ident,"type":"Condensateur (ouvert en DC permanent)","a":terminal_net[(cid,"A")],"b":terminal_net[(cid,"B")]})
         elif typ == "Contacteur KM1":
+            # Bobine du contacteur : résistance cuivre équivalente entre A1 et A2.
             add_r(cid, f"{ident} — bobine A1/A2", "A1", "A2", float(par.get("coil_r",1000.0)), "Bobine de contacteur")
 
+    # Ne garder que les nœuds participant au réseau conducteur, pour ne pas rendre
+    # singulier un condensateur isolé en circuit ouvert.
     active_nets=set()
     for e in branches+voltage_sources+diodes:
         active_nets.update((e["a"],e["b"]))
@@ -1040,6 +1083,8 @@ def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
                 ia,ib=idx[a],idx[b]; mat[ia,ib]-=g; mat[ib,ia]-=g
         for d in diodes:
             if not d["on"]:
+                # Résistance de fuite très élevée : évite une matrice singulière
+                # lorsqu'une diode bloquée isole un nœud du réseau.
                 stamp_g(d["a"], d["b"], 1e-9)
         for e in branches:
             if e["type"]=="Source de courant DC":
@@ -1083,6 +1128,7 @@ def resoudre_circuit_dc(state, bornes_par_arete, parametres, noeud_masse):
         va,vb=volts.get(e["a"],float("nan")),volts.get(e["b"],float("nan"))
         rows.append({"Composant":e["nom"],"Modèle":e["type"],"Nœud +":e["a"],"Nœud -":e["b"],"Tension (V)":va-vb if np.isfinite(va) and np.isfinite(vb) else float("nan"),"Courant (+ vers -) (A)":0.0,"Puissance absorbée (W)":0.0})
     return volts, pd.DataFrame(rows)
+
 
 
 def creer_schema_tp(tp_nom):
@@ -1287,6 +1333,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
         st.stop()
 
     initialiser_circuit_graphique()
+    # Le choix de marque est placé avant le chargement du TP pour que chaque
+    # carte reçoive immédiatement la photographie correspondant à la marque.
     marque_graphique = st.selectbox("🏷️ Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_graphique")
     tp_graphique = st.selectbox("TP de référence", list(TPS.keys()), key="tp_graphique_select")
     if st.session_state.tp_graphique_courant != tp_graphique:
@@ -1295,6 +1343,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
         st.session_state.bornes_par_arete = {}
         st.session_state.couleurs_fils_par_arete = {}
         st.session_state.pop("dernier_resultat_graphique", None)
+        # Dès le choix du TP, afficher tous les composants attendus dans la zone
+        # graphique. Aucun fil n'est créé : l'étudiant réalise le montage.
         charger_composants_du_tp_graphique(tp_graphique, marque=marque_graphique)
 
     st.info(TPS[tp_graphique]["description"])
@@ -1337,12 +1387,12 @@ elif espace == "🧩 Éditeur graphique de circuits":
         st.subheader("⚙️ Zone de câblage")
         with st.expander("ℹ️ Configuration des nœuds", expanded=False):
             st.markdown(
-                "- **Node Content** : nom de l'appareil, symbole et liste de ses bornes.\n"
-                "- **Node Width** : 230 px pour afficher correctement les informations.\n"
-                "- **Type** : `default` (entrée et sortie disponibles).\n"
-                "- **Source Position** : `Right` (sortie à droite).\n"
-                "- **Target Position** : `Left` (entrée à gauche).\n"
-                "- **Draggable / Connectable / Deletable** : activés.\n\n"
+                "- **Node Content** : nom de l'appareil, symbole et liste de ses bornes.\\n"
+                "- **Node Width** : 230 px pour afficher correctement les informations.\\n"
+                "- **Type** : `default` (entrée et sortie disponibles).\\n"
+                "- **Source Position** : `Right` (sortie à droite).\\n"
+                "- **Target Position** : `Left` (entrée à gauche).\\n"
+                "- **Draggable / Connectable / Deletable** : activés.\\n\\n"
                 "Chaque broche affichée est un nœud connectable distinct : le fil mémorise "
                 "automatiquement l'identifiant de la borne de départ et celui de la borne d'arrivée."
             )
@@ -1366,6 +1416,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
         k: v for k, v in st.session_state.bornes_par_arete.items() if k in edge_ids
     }
 
+    # Les bornes sont maintenant déterminées par les broches graphiques réellement reliées.
     st.session_state.bornes_par_arete = _paires_bornes_graphiques(state_graph)
     st.subheader("🔌 Connexions broche à broche")
     if not state_graph.nodes:
@@ -1443,6 +1494,8 @@ elif espace == "🧩 Éditeur graphique de circuits":
                 parametres_dc[node.id]["coil_r"] = st.number_input(f"{ident} — résistance bobine A1/A2 (Ω)", min_value=1.0, value=1000.0, key=f"dc_coil_{node.id}")
                 parametres_dc[node.id]["contacts_fermes"] = st.checkbox(f"{ident} — contacts de puissance et auxiliaire NO fermés", value=False, key=f"dc_contacts_{node.id}")
 
+        # Reconstituer les réseaux électriques pour proposer un choix de masse
+        # et des points de mesure qui correspondent aux fils réellement posés.
         parent_mesure = {}
         def find_mesure(x):
             parent_mesure.setdefault(x, x)
@@ -1579,7 +1632,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
             f"Puissance réactive : **{q_var/1000:.2f} kvar** · "
             f"Pertes estimées : **{(p1_w-p2_w)/1000:.2f} kW**"
         )
-        st.latex(r"P_1=\frac{P_2}{\eta},\quad I_n=\frac{P_1}{\sqrt{3}\,U\cos\varphi},\quad T_n=\frac{9550P_2(\mathrm{kW})}{n(\mathrm{tr/min})}")
+        st.latex(r"P_1=\\frac{P_2}{\\eta},\\quad I_n=\\frac{P_1}{\\sqrt{3}\\,U\\cos\\varphi},\\quad T_n=\\frac{9550P_2(\\mathrm{kW})}{n(\\mathrm{tr/min})}")
         st.warning(
             "Le courant de démarrage affiché est une estimation par multiplicateur saisi. "
             "Ce modèle ne calcule pas le transitoire électromagnétique, le glissement, "
@@ -1671,7 +1724,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
             height=390, legend=dict(orientation="h"),
         )
         st.plotly_chart(fig_rc, use_container_width=True)
-        st.latex(r"\tau=RC,\quad u_C(t)=U(1-e^{-t/RC}),\quad i(t)=\frac{U}{R}e^{-t/RC}")
+        st.latex(r"\\tau=RC,\\quad u_C(t)=U(1-e^{-t/RC}),\\quad i(t)=\\frac{U}{R}e^{-t/RC}")
         st.caption("Modèle analytique d'un circuit RC série idéal, sans résistance interne ni fuite du condensateur.")
 
     elif tp_graphique == "Commande d'un moteur par Arduino":
@@ -1698,6 +1751,7 @@ elif espace == "🧩 Éditeur graphique de circuits":
             "Respecter les limites de courant de la broche et utiliser un étage de puissance "
             "pour toute charge inductive ou moteur."
         )
+
 
     st.subheader("🧪 Simulation logique et correction")
     st.warning(
@@ -1735,536 +1789,392 @@ elif espace == "🧩 Éditeur graphique de circuits":
                 st.dataframe(pd.DataFrame(resultat_graph["details"]), use_container_width=True, hide_index=True)
 
 elif espace == "🧪 Réaliser un TP":
-    st.title("🧪 Mon espace de travaux pratiques")
-    st.caption("Sélectionnez votre TP, réalisez le câblage, lancez la simulation, puis mesurez les grandeurs électriques.")
-
+    st.title("🧪 Réalisation et validation d'un TP")
     if not identite_complete:
-        st.warning("Saisissez votre matricule étudiant dans la barre latérale pour accéder à vos TP.")
+        st.warning("Saisissez un matricule étudiant valide dans la barre latérale pour accéder uniquement aux TP de votre promotion, groupe et sous-groupe.")
         st.stop()
-
     if df_edt_lab.empty:
-        st.error("Le fichier de l'emploi du temps est absent ou ne contient pas les colonnes attendues.")
+        st.error("Le fichier dataEDT-ELT-S1-2027.xlsx est absent ou ne contient pas les colonnes attendues.")
         st.stop()
 
     st.success(
-        f"Étudiant : {prenom} {nom} — Promotion {promotion} — "
-        f"Groupe {groupe or 'non renseigné'} — Sous-groupe {sous_groupe or 'non renseigné'}"
+        f"Étudiant : {prenom} {nom} · Promotion : {promotion} · "
+        f"Groupe : {groupe or '—'} · Sous-groupe : {sous_groupe or '—'}"
     )
-
     tp_etudiant_df = _lab_tp_etudiant(etudiant_connecte, df_edt_lab)
-
     if tp_etudiant_df.empty:
-        st.warning("Aucun TP n'est programmé pour votre promotion, votre groupe et votre sous-groupe.")
+        st.warning("Aucun TP n'a été trouvé dans l'EDT pour votre promotion et votre groupe/sous-groupe. Vérifiez votre inscription auprès de l'administration.")
         st.stop()
 
-    st.subheader("1. Mes travaux pratiques")
-
-    options_tp = sorted(
-        tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(),
-        key=lambda x: _lab_normaliser(x)
+    options_tp_edt = sorted(tp_etudiant_df["Enseignements"].dropna().astype(str).str.strip().unique(), key=lambda x: _lab_normaliser(x))
+    st.caption(f"{len(options_tp_edt)} intitulé(s) de TP disponible(s) pour votre inscription.")
+    tp_edt_choisi = st.selectbox(
+        "Choisir le travail pratique",
+        options_tp_edt,
+        key=f"tp_edt_etudiant_{_lab_normaliser_matricule(matricule_etudiant)}",
     )
-
-    tp_choisi = st.selectbox(
-        "Choisir le TP correspondant à mon emploi du temps",
-        options_tp,
-        key="etu_tp_choisi"
-    )
-
-    lignes_tp = tp_etudiant_df[
-        tp_etudiant_df["Enseignements"].astype(str).str.strip().eq(tp_choisi)
+    lignes_tp_choisi = tp_etudiant_df[
+        tp_etudiant_df["Enseignements"].astype(str).str.strip().eq(tp_edt_choisi)
     ].copy()
+    enseignants_tp = sorted({
+        _lab_nettoyer_texte(x) for x in lignes_tp_choisi["Enseignants"].tolist()
+        if _lab_nettoyer_texte(x)
+    })
+    st.subheader("👨‍🏫 Chargé(s) de matière")
+    if enseignants_tp:
+        for enseignant in enseignants_tp:
+            st.markdown(f"- **{enseignant}**")
+    else:
+        st.warning("Aucun enseignant n'est renseigné pour ce TP dans l'EDT.")
+    infos_tp = lignes_tp_choisi[["Jours", "Horaire", "Lieu"]].drop_duplicates()
+    if not infos_tp.empty:
+        st.caption("Séances programmées pour ce TP :")
+        st.dataframe(infos_tp, use_container_width=True, hide_index=True)
 
-    enseignants_tp = sorted(
-        {_lab_nettoyer_texte(x) for x in lignes_tp["Enseignants"].tolist() if _lab_nettoyer_texte(x)}
-    )
-
-    col_info1, col_info2 = st.columns(2)
-
-    with col_info1:
-        st.markdown("**Enseignants chargés du TP**")
-        if enseignants_tp:
-            for enseignant in enseignants_tp:
-                st.markdown(f"- {enseignant}")
-        else:
-            st.warning("Aucun enseignant n'est renseigné pour ce TP.")
-
-    with col_info2:
-        st.markdown("**Séances programmées**")
-        infos_tp = lignes_tp[["Jours", "Horaire", "Lieu"]].drop_duplicates()
-        if not infos_tp.empty:
-            st.dataframe(infos_tp, use_container_width=True, hide_index=True)
-        else:
-            st.info("Aucune séance détaillée n'est disponible.")
-
-    tp_nom = _lab_modele_simulation_depuis_tp(tp_choisi)
-
+    tp_nom = _lab_modele_simulation_depuis_tp(tp_edt_choisi)
     if tp_nom is None or tp_nom not in TPS:
         st.info(
-            "Ce TP est bien associé à votre groupe dans l'emploi du temps. "
-            "Son modèle de simulation doit encore être activé par l'équipe pédagogique."
+            "Ce TP est bien associé à votre promotion et à votre groupe dans l'EDT. "
+            "Son intitulé et son enseignant sont affichés ci-dessus. "
+            "Son schéma interactif doit encore être défini dans la bibliothèque pédagogique "
+            "avant de lancer une simulation pour ce TP."
         )
         st.stop()
 
     tp = TPS[tp_nom]
-    st.divider()
-
-    st.subheader("2. Banc de manipulation")
+    if st.session_state.get("tp_realiser_courant") != tp_edt_choisi:
+        st.session_state.tp_realiser_courant = tp_edt_choisi
+        st.session_state.liaisons_etudiant = list(tp["liaisons"])
+        st.session_state.dernier_resultat = None
+        st.session_state.composants_tp_personnalises = list(tp["composants"])
+        st.session_state.pop("courbe_sonde_tp", None)
     st.info(tp["description"])
 
-    st.markdown("**Matériel et composants à utiliser**")
-
-    colonnes_composants = st.columns(3)
-    for index, composant in enumerate(tp["composants"]):
-        categorie_composant = next(
-            (cat for cat, elements in COMPOSANTS.items() if composant in elements),
-            "Composants génériques"
-        )
-        bornes_composant = COMPOSANTS[categorie_composant][composant]
-        fiche = fiche_composant(
-            composant,
-            categorie_composant,
-            bornes_composant,
-            "Schneider Electric"
-        )
-
-        with colonnes_composants[index % 3]:
-            with st.container(border=True):
-                st.markdown(f"**{composant}**")
-                afficher_photo_composant(composant, fiche)
-                st.caption(f"Bornes : {', '.join(bornes_composant)}")
-                st.caption(fiche["fonction"])
+    st.subheader("Schéma du TP chargé automatiquement")
+    st.caption("Le schéma ci-dessous affiche immédiatement les composants et les connexions du montage de référence. Il sert de point de départ ; vous pouvez ensuite créer votre propre montage.")
+    st.plotly_chart(creer_schema_tp(tp_nom), use_container_width=True, key="schema_tp_auto")
+    with st.expander("Voir les connexions du schéma de référence"):
+        st.dataframe(pd.DataFrame([{"Borne de départ": a, "Borne d'arrivée": b} for a, b in tp["liaisons"]]), use_container_width=True, hide_index=True)
 
     st.divider()
-
-    st.subheader("3. Réalisation du câblage")
-
-    if st.session_state.get("etu_tp_courant") != tp_nom:
-        st.session_state["etu_tp_courant"] = tp_nom
-        st.session_state["liaisons_etudiant"] = list(tp["liaisons"])
-        st.session_state["etu_resultat_simulation"] = None
-
-    bornes_disponibles = liste_composants_selectionnes(tp["composants"])
-
-    if not bornes_disponibles:
-        st.warning("Aucun composant n'est disponible pour ce TP.")
-        st.stop()
-
-    with st.form("form_cablage_etudiant", clear_on_submit=True):
-        col_depart, col_arrivee = st.columns(2)
-
-        with col_depart:
-            borne_depart = st.selectbox(
-                "Point de départ du câble",
-                bornes_disponibles,
-                key="etu_borne_depart"
-            )
-
-        with col_arrivee:
-            borne_arrivee = st.selectbox(
-                "Point d'arrivée du câble",
-                bornes_disponibles,
-                key="etu_borne_arrivee"
-            )
-
-        ajouter_cable = st.form_submit_button(
-            "🔌 Ajouter le câble",
-            use_container_width=True
-        )
-
-    if ajouter_cable:
-        if borne_depart == borne_arrivee:
-            st.error("Le point de départ et le point d'arrivée doivent être différents.")
-        elif (borne_depart, borne_arrivee) in st.session_state.liaisons_etudiant or (
-            borne_arrivee, borne_depart
-        ) in st.session_state.liaisons_etudiant:
-            st.warning("Cette connexion existe déjà.")
-        else:
-            st.session_state.liaisons_etudiant.append((borne_depart, borne_arrivee))
-            st.success("Câble ajouté.")
+    st.subheader("1. Créer ou modifier votre propre montage")
+    mode_montage = st.radio(
+        "Mode de travail", ["Partir du schéma fourni", "Créer un montage personnel"],
+        horizontal=True, key="mode_montage_tp"
+    )
+    if mode_montage == "Créer un montage personnel":
+        if st.button("Nouveau montage vierge", key="nouveau_montage_vierge"):
+            st.session_state.liaisons_etudiant = []
+            st.session_state.composants_tp_personnalises = []
             st.rerun()
+        defauts_composants = st.session_state.get("composants_tp_personnalises", [])
+    else:
+        defauts_composants = list(tp["composants"])
+        st.session_state.composants_tp_personnalises = list(tp["composants"])
+        if not st.session_state.liaisons_etudiant:
+            st.session_state.liaisons_etudiant = list(tp["liaisons"])
+
+    tous_composants = sorted({c for groupe_c in COMPOSANTS.values() for c in groupe_c})
+    composants_choisis = st.multiselect(
+        "Composants placés sur votre plan de travail", options=tous_composants,
+        default=[c for c in defauts_composants if c in tous_composants],
+        key=f"composants_tp_multiselect_{tp_nom}_{mode_montage}",
+        help="Le mode TP charge les composants de référence. En montage personnel, choisissez librement les composants."
+    )
+    st.session_state.composants_tp_personnalises = list(composants_choisis)
+    bornes_disponibles = liste_composants_selectionnes(composants_choisis)
+
+    st.markdown("**Ajouter un fil entre deux bornes**")
+    if not bornes_disponibles:
+        st.warning("Ajoutez au moins un composant pour afficher ses bornes.")
+    else:
+        with st.form("form_ajout_liaison", clear_on_submit=True):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                borne_depart = st.selectbox("Borne de départ", bornes_disponibles, key="borne_depart")
+            with col_b:
+                borne_arrivee = st.selectbox("Borne d'arrivée", bornes_disponibles, key="borne_arrivee")
+            ajouter = st.form_submit_button("➕ Ajouter la liaison")
+            if ajouter:
+                if borne_depart == borne_arrivee:
+                    st.error("Une borne ne peut pas être reliée à elle-même.")
+                elif (borne_depart, borne_arrivee) in st.session_state.liaisons_etudiant or (borne_arrivee, borne_depart) in st.session_state.liaisons_etudiant:
+                    st.warning("Cette liaison existe déjà.")
+                else:
+                    st.session_state.liaisons_etudiant.append((borne_depart, borne_arrivee))
+                    st.success("Liaison ajoutée.")
+                    st.rerun()
 
     if st.session_state.liaisons_etudiant:
-        st.markdown("**Câblage réalisé**")
-
-        for index, (depart, arrivee) in enumerate(st.session_state.liaisons_etudiant):
-            col_cable1, col_cable2, col_cable3 = st.columns([4, 4, 1])
-
-            with col_cable1:
-                st.write(f"**{depart}**")
-
-            with col_cable2:
-                st.write(f"→ **{arrivee}**")
-
-            with col_cable3:
-                if st.button("❌", key=f"etu_supprimer_cable_{index}"):
-                    st.session_state.liaisons_etudiant.pop(index)
-                    st.session_state["etu_resultat_simulation"] = None
-                    st.rerun()
-    else:
-        st.info("Aucun câble n'a encore été réalisé.")
-
-    col_reset1, col_reset2 = st.columns(2)
-
-    with col_reset1:
-        if st.button("♻️ Recharger le câblage de référence", use_container_width=True):
-            st.session_state["liaisons_etudiant"] = list(tp["liaisons"])
-            st.session_state["etu_resultat_simulation"] = None
-            st.rerun()
-
-    with col_reset2:
-        if st.button("🧹 Vider le câblage", use_container_width=True):
-            st.session_state["liaisons_etudiant"] = []
-            st.session_state["etu_resultat_simulation"] = None
-            st.rerun()
+        st.dataframe(pd.DataFrame([
+            {"N°": i + 1, "Départ": a, "Arrivée": b}
+            for i, (a, b) in enumerate(st.session_state.liaisons_etudiant)
+        ]), use_container_width=True, hide_index=True)
+        cdel, cclear = st.columns(2)
+        with cdel:
+            idx = st.number_input("N° de la liaison à retirer", min_value=1,
+                                  max_value=len(st.session_state.liaisons_etudiant), value=1, step=1,
+                                  key="liaison_a_supprimer_tp")
+            if st.button("Retirer cette liaison", key="retirer_liaison_tp"):
+                st.session_state.liaisons_etudiant.pop(int(idx) - 1)
+                st.rerun()
+        with cclear:
+            if st.button("Effacer toutes les liaisons", key="effacer_liaisons_tp"):
+                st.session_state.liaisons_etudiant = []
+                st.rerun()
 
     st.divider()
-
-    st.subheader("4. Simulation du montage")
-
-    if st.button(
-        "▶️ Lancer la simulation",
-        type="primary",
-        use_container_width=True,
-        key="etu_lancer_simulation"
-    ):
-        resultat_cablage = corriger_montage(
-            tp_nom,
-            tp["composants"],
-            st.session_state.liaisons_etudiant
-        )
-
-        st.session_state["etu_resultat_simulation"] = {
-            "cablage": resultat_cablage,
-            "branches": []
-        }
-
-        u = 24.0
-        f = 50.0
-        r = 100.0
-
-        if "Graetz" in tp_nom or "Redressement" in tp_nom:
-            v_moy = 0.9 * u
-            i_moy = v_moy / r
-            p_moy = v_moy * i_moy
-
-            st.session_state["etu_resultat_simulation"]["branches"] = [
-                {
-                    "branche": "Transformateur → Pont de Graetz",
-                    "tension": u,
-                    "courant": i_moy,
-                    "puissance": u * i_moy
-                },
-                {
-                    "branche": "Pont de Graetz → Résistance",
-                    "tension": v_moy,
-                    "courant": i_moy,
-                    "puissance": p_moy
-                },
-                {
-                    "branche": "Résistance de charge",
-                    "tension": v_moy,
-                    "courant": i_moy,
-                    "puissance": p_moy
-                }
-            ]
-
-        elif "RC" in tp_nom:
-            tau = r * 100e-6
-            i_initial = u / r
-
-            st.session_state["etu_resultat_simulation"]["branches"] = [
-                {
-                    "branche": "Source → Résistance",
-                    "tension": u,
-                    "courant": i_initial,
-                    "puissance": u * i_initial
-                },
-                {
-                    "branche": "Résistance → Condensateur",
-                    "tension": u,
-                    "courant": i_initial,
-                    "puissance": u * i_initial
-                },
-                {
-                    "branche": "Condensateur",
-                    "tension": u,
-                    "courant": 0.0,
-                    "puissance": 0.0
-                }
-            ]
-
-        elif "Arduino" in tp_nom:
-            i_led = max(0.0, (5.0 - 2.0) / 330.0)
-
-            st.session_state["etu_resultat_simulation"]["branches"] = [
-                {
-                    "branche": "Arduino D5 → Résistance",
-                    "tension": 3.0,
-                    "courant": i_led,
-                    "puissance": 3.0 * i_led
-                },
-                {
-                    "branche": "Résistance → LED",
-                    "tension": 2.0,
-                    "courant": i_led,
-                    "puissance": 2.0 * i_led
-                }
-            ]
-
-        elif "moteur asynchrone" in tp_nom.lower():
-            i_nominal = 8.5
-            couple = 26.0
-            vitesse = 1450.0
-            p_utile = couple * vitesse * 2 * math.pi / 60
-            p_absorbee = p_utile / 0.86
-
-            st.session_state["etu_resultat_simulation"]["branches"] = [
-                {
-                    "branche": "Réseau → Disjoncteur",
-                    "tension": 400.0,
-                    "courant": i_nominal,
-                    "puissance": p_absorbee
-                },
-                {
-                    "branche": "Disjoncteur → Contacteur",
-                    "tension": 400.0,
-                    "courant": i_nominal,
-                    "puissance": p_absorbee
-                },
-                {
-                    "branche": "Contacteur → Relais thermique",
-                    "tension": 400.0,
-                    "courant": i_nominal,
-                    "puissance": p_absorbee
-                },
-                {
-                    "branche": "Relais thermique → Moteur",
-                    "tension": 400.0,
-                    "courant": i_nominal,
-                    "puissance": p_absorbee
-                }
-            ]
-
-        else:
-            i_dc = u / r
-            p_dc = u * i_dc
-
-            st.session_state["etu_resultat_simulation"]["branches"] = [
-                {
-                    "branche": "Source → Charge",
-                    "tension": u,
-                    "courant": i_dc,
-                    "puissance": p_dc
-                },
-                {
-                    "branche": "Charge",
-                    "tension": u,
-                    "courant": i_dc,
-                    "puissance": p_dc
-                }
-            ]
-
-    resultat_simulation = st.session_state.get("etu_resultat_simulation")
-
-    if resultat_simulation is None:
-        st.info("Réalisez le câblage puis lancez la simulation.")
+    st.subheader("2. Mesures et tracé des courbes")
+    st.caption("Choisissez le type de mesure et les bornes où placer les sondes. Les courbes sont des modèles pédagogiques du TP sélectionné ; elles ne prétendent pas être une mesure électrique issue d'un appareil réel tant que le circuit n'est pas résolu par le simulateur correspondant.")
+    type_mesure = st.selectbox("Appareil / grandeur à mesurer", ["Tension entre deux bornes (voltmètre)", "Courant dans un composant (ampèremètre)", "Tracer le signal temporel à l'oscilloscope"], key="type_mesure_tp")
+    borne_a = borne_b = "Non sélectionnée"
+    composant_courant = composants_choisis[0] if composants_choisis else "Aucun composant"
+    if "Tension" in type_mesure or "oscilloscope" in type_mesure.lower():
+        if bornes_disponibles:
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                borne_a = st.selectbox("Sonde positive / CH1+", bornes_disponibles, key="sonde_positive_tp")
+            with mc2:
+                borne_b = st.selectbox("Sonde négative / référence", bornes_disponibles, key="sonde_negative_tp")
+            if borne_a == borne_b:
+                st.warning("Choisissez deux bornes différentes pour mesurer une différence de potentiel.")
     else:
-        resultat_cablage = resultat_simulation["cablage"]
-
-        if resultat_cablage["correct"]:
-            st.success("✅ Câblage conforme au schéma de référence.")
+        if composants_choisis:
+            composant_courant = st.selectbox("Composant traversé par le courant", composants_choisis, key="composant_mesure_courant_tp")
+    if st.button("📈 Tracer la courbe", type="primary", key="tracer_courbe_sonde_tp"):
+        if not bornes_disponibles:
+            st.error("Ajoutez des composants avant de placer une sonde.")
+        elif ("Tension" in type_mesure or "oscilloscope" in type_mesure.lower()) and borne_a == borne_b:
+            st.error("Les deux sondes doivent être placées sur des bornes différentes.")
         else:
-            st.warning("⚠️ Le câblage comporte des différences par rapport au schéma de référence.")
-
-        st.metric("Note indicative du câblage", f"{resultat_cablage['note']:.2f} / 20")
-
-        if resultat_cablage["details"]:
-            st.dataframe(
-                pd.DataFrame(resultat_cablage["details"]),
-                use_container_width=True,
-                hide_index=True
-            )
-
-        st.subheader("Résultats dans les branches du montage")
-
-        if resultat_simulation["branches"]:
-            st.dataframe(
-                pd.DataFrame(resultat_simulation["branches"]),
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("Aucun résultat de branche disponible pour ce TP.")
+            st.session_state.courbe_sonde_tp = {
+                "type": type_mesure, "a": borne_a, "b": borne_b,
+                "composant": composant_courant, "tp": tp_nom,
+            }
+    sonde = st.session_state.get("courbe_sonde_tp")
+    if sonde and sonde.get("tp") == tp_nom:
+        st.plotly_chart(tracer_courbe_sonde(tp_nom, sonde["type"], sonde["a"], sonde["b"], sonde["composant"]), use_container_width=True)
+        st.caption(f"Sonde sélectionnée : {sonde['type']} · {sonde['a']} / {sonde['b']} · composant : {sonde['composant']}")
 
     st.divider()
-
-    st.subheader("5. Appareils de mesure et emplacement")
-
-    if resultat_simulation is None:
-        st.info("Lancez d'abord la simulation pour afficher les mesures.")
-    else:
-        branches_disponibles = [
-            branche["branche"]
-            for branche in resultat_simulation["branches"]
-        ]
-
-        appareil_mesure = st.selectbox(
-            "Appareil de mesure",
-            [
-                "Voltmètre",
-                "Ampèremètre",
-                "Oscilloscope",
-                "Wattmètre",
-                "Tachymètre",
-                "Multimètre"
-            ],
-            key="etu_appareil_mesure"
-        )
-
-        emplacement_mesure = st.selectbox(
-            "Emplacement de l'appareil",
-            branches_disponibles,
-            key="etu_emplacement_mesure"
-        )
-
-        branche_mesuree = next(
-            (
-                branche
-                for branche in resultat_simulation["branches"]
-                if branche["branche"] == emplacement_mesure
-            ),
-            None
-        )
-
-        if branche_mesuree is None:
-            st.warning("Sélectionnez une branche valide.")
+    st.subheader("3. Correction automatique du montage")
+    st.caption("La correction compare votre sélection et vos connexions au schéma de référence du TP.")
+    if st.button("✅ Vérifier et corriger mon montage", type="primary", use_container_width=True, key="verifier_montage_tp"):
+        if not identite_complete:
+            st.error("Identité non reconnue : vérifiez votre matricule étudiant dans la barre latérale.")
         else:
-            col_mesure1, col_mesure2, col_mesure3 = st.columns(3)
+            resultat = corriger_montage(tp_nom, composants_choisis, st.session_state.liaisons_etudiant)
+            st.session_state.dernier_resultat = resultat
+            st.session_state.historique.append({
+                "Date": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "Nom": nom.strip(), "Prénom": prenom.strip(),
+                "Promotion": promotion.strip(), "Groupe": groupe.strip(),
+                "TP": tp_edt_choisi, "Chargé(s) de matière": ", ".join(enseignants_tp), "Note": resultat["note"],
+                "Résultat": "Réussi" if resultat["correct"] else "À corriger",
+            })
+    resultat = st.session_state.dernier_resultat
+    if resultat:
+        st.divider()
+        if resultat["correct"]:
+            st.balloons()
+            st.success("Excellent ! Tous les composants et câblages correspondent au corrigé de référence.")
+            st.metric("Note obtenue", "20 / 20")
+        else:
+            st.warning("Votre montage comporte des erreurs. Consultez le tableau de correction ci-dessous.")
+            st.metric("Note indicative", f'{resultat["note"]:.2f} / 20')
+            if resultat["details"]:
+                st.dataframe(pd.DataFrame(resultat["details"]), use_container_width=True, hide_index=True)
 
-            if appareil_mesure == "Voltmètre":
-                valeur_mesuree = branche_mesuree["tension"]
-                unite_mesuree = "V"
-                calibre_mesure = "20 V" if abs(valeur_mesuree) <= 20 else "200 V"
-                depassement = abs(valeur_mesuree) > 200
-
-            elif appareil_mesure == "Ampèremètre":
-                valeur_mesuree = branche_mesuree["courant"]
-                unite_mesuree = "A"
-                calibre_mesure = "2 A" if abs(valeur_mesuree) <= 2 else "10 A"
-                depassement = abs(valeur_mesuree) > 10
-
-            elif appareil_mesure == "Wattmètre":
-                valeur_mesuree = branche_mesuree["puissance"]
-                unite_mesuree = "W"
-                calibre_mesure = "Automatique"
-                depassement = False
-
-            elif appareil_mesure == "Tachymètre":
-                valeur_mesuree = 1450.0 if "moteur" in tp_nom.lower() else 0.0
-                unite_mesuree = "tr/min"
-                calibre_mesure = "Automatique"
-                depassement = False
-
-            elif appareil_mesure == "Multimètre":
-                valeur_mesuree = branche_mesuree["tension"]
-                unite_mesuree = "V"
-                calibre_mesure = "Automatique"
-                depassement = False
-
-            else:
-                valeur_mesuree = branche_mesuree["tension"]
-                unite_mesuree = "V"
-                calibre_mesure = "Automatique"
-                depassement = False
-
-            with col_mesure1:
-                st.markdown(f"**{appareil_mesure}**")
-                st.caption(f"Emplacement : {emplacement_mesure}")
-
-            with col_mesure2:
-                if depassement:
-                    st.error("OL — dépassement de calibre")
-                else:
-                    st.metric(
-                        "Valeur mesurée",
-                        f"{valeur_mesuree:.3g} {unite_mesuree}"
-                    )
-
-            with col_mesure3:
-                st.caption(f"Calibre : {calibre_mesure}")
-
-            if appareil_mesure == "Oscilloscope":
-                st.markdown("**Visualisation du signal**")
-
-                if "Graetz" in tp_nom or "Redressement" in tp_nom:
-                    t_osc = np.linspace(0, 2 / f, 1200)
-                    signal_osc = u * np.sqrt(2) * np.sin(2 * math.pi * f * t_osc)
-                    titre_osc = "Tension alternative d'entrée"
-
-                elif "RC" in tp_nom:
-                    tau = r * 100e-6
-                    t_osc = np.linspace(0, 5 * tau, 800)
-                    signal_osc = u * (1 - np.exp(-t_osc / tau))
-                    titre_osc = "Charge du condensateur"
-
-                elif "moteur asynchrone" in tp_nom.lower():
-                    t_osc = np.linspace(0, 0.04, 1000)
-                    signal_osc = 325 * np.sin(2 * math.pi * 50 * t_osc)
-                    titre_osc = "Tension du réseau triphasé"
-
-                else:
-                    t_osc = np.linspace(0, 0.1, 1000)
-                    signal_osc = np.full_like(t_osc, u)
-                    titre_osc = "Tension continue"
-
-                fig_osc = go.Figure()
-                fig_osc.add_trace(
-                    go.Scatter(
-                        x=t_osc * 1000,
-                        y=signal_osc,
-                        mode="lines",
-                        name=titre_osc,
-                        line=dict(color="#2563eb", width=2)
-                    )
-                )
-                fig_osc.update_layout(
-                    title=f"Oscilloscope — {titre_osc}",
-                    xaxis_title="Temps (ms)",
-                    yaxis_title="Tension (V)",
-                    height=420,
-                    margin=dict(l=10, r=10, t=45, b=10)
-                )
-                st.plotly_chart(fig_osc, use_container_width=True, key="etu_oscilloscope")
-
-            elif appareil_mesure == "Tachymètre":
-                if "moteur" in tp_nom.lower():
-                    st.plotly_chart(
-                        creer_schema_tp(tp_nom),
-                        use_container_width=True,
-                        key="etu_schema_tachymetre"
-                    )
-                else:
-                    st.info("Le tachymètre est disponible uniquement pour les TP moteur.")
-
-            else:
-                st.info(
-                    "La valeur affichée correspond à la branche sélectionnée "
-                    "dans la simulation du montage."
-                )
-
-    st.divider()
-
-    st.subheader("6. Schéma de référence du TP")
-    st.caption(
-        "Le schéma sert de repère pédagogique. Il ne révèle pas automatiquement "
-        "le corrigé détaillé du câblage."
+elif espace == "📈 Mesures réelles & comparaison":
+    st.title("📈 Comparaison théorie / expérience")
+    st.write(
+        "Importez un fichier de mesures. Choisissez les colonnes de l'axe X et de la mesure Y, "
+        "puis sélectionnez un modèle théorique pédagogique."
+    )
+    fichier = st.file_uploader(
+        "Importer les mesures expérimentales",
+        type=["xlsx", "xls", "csv"],
+        help="Formats acceptés : Excel .xlsx/.xls et CSV.",
     )
 
-    st.plotly_chart(
-        creer_schema_tp(tp_nom),
-        use_container_width=True,
-        key="etu_schema_reference"
-    )
+    if fichier is not None:
+        try:
+            if fichier.name.lower().endswith(".csv"):
+                try:
+                    donnees = pd.read_csv(fichier, sep=None, engine="python")
+                except UnicodeDecodeError:
+                    fichier.seek(0)
+                    donnees = pd.read_csv(fichier, sep=None, engine="python", encoding="latin-1")
+            else:
+                donnees = pd.read_excel(fichier)
+            donnees = donnees.dropna(how="all")
+            st.subheader("Aperçu des données")
+            st.dataframe(donnees.head(20), use_container_width=True)
+            colonnes = list(donnees.columns)
+            if len(colonnes) >= 2:
+                colx, coly = st.columns(2)
+                with colx:
+                    axe_x = st.selectbox("Colonne de l'axe X", colonnes, index=0)
+                with coly:
+                    axe_y = st.selectbox("Colonne de la mesure Y", colonnes, index=1)
+                modele = st.selectbox(
+                    "Modèle théorique de référence",
+                    [
+                        "Sinusoïde",
+                        "Redressement double alternance",
+                        "Réponse indicielle RC (charge)",
+                        "Vitesse moteur (montée simplifiée)",
+                        "Valeur constante",
+                    ],
+                )
+                amplitude = st.number_input("Amplitude théorique", value=10.0, step=1.0)
+                parametre = st.number_input(
+                    "Paramètre du modèle (fréquence / constante de temps)",
+                    min_value=0.001, value=1.0, step=0.1,
+                )
+                if st.button("📊 Tracer et comparer", type="primary"):
+                    travail = donnees[[axe_x, axe_y]].copy()
+                    travail[axe_x] = pd.to_numeric(travail[axe_x], errors="coerce")
+                    travail[axe_y] = pd.to_numeric(travail[axe_y], errors="coerce")
+                    travail = travail.dropna().sort_values(axe_x)
+                    if len(travail) < 2:
+                        st.error("Il faut au moins deux lignes numériques valides.")
+                    else:
+                        x = travail[axe_x].to_numpy(dtype=float)
+                        y = travail[axe_y].to_numpy(dtype=float)
+                        t = x - np.min(x)
+                        if modele == "Sinusoïde":
+                            y_theorie = amplitude * np.sin(2 * np.pi * parametre * t)
+                        elif modele == "Redressement double alternance":
+                            y_theorie = np.abs(amplitude * np.sin(2 * np.pi * parametre * t))
+                        elif modele == "Réponse indicielle RC (charge)":
+                            y_theorie = amplitude * (1 - np.exp(-t / parametre))
+                        elif modele == "Vitesse moteur (montée simplifiée)":
+                            y_theorie = amplitude * (1 - np.exp(-t / parametre))
+                        else:
+                            y_theorie = np.full_like(x, amplitude, dtype=float)
+
+                        ecart_abs = np.abs(y - y_theorie)
+                        masque = np.abs(y_theorie) > 1e-9
+                        erreurs_relatives = (ecart_abs[masque] / np.abs(y_theorie[masque])) * 100
+                        erreur_moyenne = float(np.mean(erreurs_relatives)) if len(erreurs_relatives) else float("nan")
+                        rmse = float(np.sqrt(np.mean((y - y_theorie) ** 2)))
+
+                        figure = go.Figure()
+                        figure.add_trace(go.Scatter(x=x, y=y_theorie, mode="lines", name="Théorie"))
+                        figure.add_trace(go.Scatter(x=x, y=y, mode="lines+markers", name="Mesures réelles"))
+                        figure.update_layout(
+                            title="Comparaison entre modèle théorique et mesures expérimentales",
+                            xaxis_title=str(axe_x), yaxis_title=str(axe_y),
+                            legend_title="Séries", hovermode="x unified",
+                        )
+                        st.plotly_chart(figure, use_container_width=True)
+                        m1, m2, m3 = st.columns(3)
+                        m1.metric("Erreur relative moyenne", "Non calculable" if math.isnan(erreur_moyenne) else f"{erreur_moyenne:.2f} %")
+                        m2.metric("RMSE", f"{rmse:.4g}")
+                        m3.metric("Nombre de mesures", len(y))
+                        rapport = travail.copy()
+                        rapport["Théorie"] = y_theorie
+                        rapport["Écart absolu"] = ecart_abs
+                        rapport["Erreur relative (%)"] = np.where(
+                            np.abs(y_theorie) > 1e-9,
+                            ecart_abs / np.abs(y_theorie) * 100,
+                            np.nan,
+                        )
+                        st.download_button(
+                            "⬇️ Télécharger le rapport comparatif CSV",
+                            data=rapport.to_csv(index=False).encode("utf-8-sig"),
+                            file_name="rapport_comparaison_theorie_experience.csv",
+                            mime="text/csv",
+                        )
+                        st.caption(
+                            "Le modèle théorique sélectionné est une référence simplifiée. "
+                            "Pour une validation scientifique, utilisez l'équation exacte du TP, "
+                            "les paramètres nominaux et les unités correctes."
+                        )
+            else:
+                st.error("Le fichier doit contenir au moins deux colonnes.")
+        except Exception as exc:
+            st.error(f"Impossible de lire le fichier : {exc}")
+            st.info("Vérifiez le format, les en-têtes et l'absence de fichier protégé par mot de passe.")
+
+elif espace == "👨‍🏫 Espace enseignant":
+    st.title("👨‍🏫 Espace enseignant — corrigés de câblage")
+    mot_de_passe_configure = obtenir_mot_de_passe_enseignant()
+    if not mot_de_passe_configure:
+        st.error("L'accès enseignant n'est pas encore configuré. Définissez le secret mot_de_passe_enseignant dans Streamlit Cloud → Settings → Secrets.")
+        st.code('mot_de_passe_enseignant = "VotreMotDePasseFort"', language="toml")
+        st.stop()
+
+    if not st.session_state.get("enseignant_authentifie", False):
+        st.info("Cet espace contient les montages de référence entièrement câblés. Il est réservé aux enseignants.")
+        mdp_saisi = st.text_input("Mot de passe enseignant", type="password", key="mdp_enseignant_saisi")
+        if st.button("🔐 Accéder à l'espace enseignant", type="primary", use_container_width=True):
+            if hmac.compare_digest(mdp_saisi, mot_de_passe_configure):
+                st.session_state.enseignant_authentifie = True
+                st.rerun()
+            else:
+                st.error("Mot de passe incorrect.")
+        st.stop()
+
+    entete1, entete2 = st.columns([4, 1])
+    with entete1:
+        st.success("Accès enseignant autorisé")
+    with entete2:
+        if st.button("🔒 Se déconnecter", use_container_width=True):
+            st.session_state.enseignant_authentifie = False
+            st.session_state.pop("mdp_enseignant_saisi", None)
+            st.rerun()
+
+    st.subheader("🧪 TP simulés — câblages de référence")
+    st.caption("Sélectionnez une manipulation pour consulter le montage complet, avec tous les composants et les conducteurs déjà reliés selon le corrigé enregistré dans TPS.")
+    tp_reference_enseignant = st.selectbox("Manipulation / TP", list(TPS.keys()), key="tp_reference_enseignant")
+    marque_reference = st.selectbox("Marque des composants", list(MARQUES_COMPOSANTS.keys()), key="marque_reference_enseignant")
+    cle_reference = f"{tp_reference_enseignant}|{marque_reference}"
+    if st.session_state.get("reference_chargee_enseignant") != cle_reference:
+        circuit_ref, bornes_ref = construire_circuit_reference_enseignant(tp_reference_enseignant, marque_reference)
+        st.session_state.circuit_reference_enseignant = circuit_ref
+        st.session_state.bornes_reference_enseignant = bornes_ref
+        st.session_state.reference_chargee_enseignant = cle_reference
+    st.write(TPS[tp_reference_enseignant]["description"])
+    if STREAMLIT_FLOW_DISPONIBLE:
+        st.markdown("**Montage de référence pré-câblé**")
+        st.session_state.circuit_graphique = streamlit_flow(
+            f"circuit_reference_enseignant_{_slug_composant(tp_reference_enseignant)}",
+            st.session_state.circuit_reference_enseignant,
+            height=650, fit_view=True, show_minimap=True,
+            hide_watermark=True, allow_new_edges=False,
+            enable_node_menu=False, enable_edge_menu=False, enable_pane_menu=False,
+            get_node_on_click=False, get_edge_on_click=False, min_zoom=0.15,
+        )
+        st.markdown("**Liste détaillée des connexions de référence**")
+        lignes_reference = []
+        for a, b in TPS[tp_reference_enseignant].get("liaisons", []):
+            lignes_reference.append({"Borne de départ": a, "Borne d'arrivée": b, "Conducteur": _couleur_initiale_fil(a, b)})
+        if lignes_reference:
+            st.dataframe(pd.DataFrame(lignes_reference), use_container_width=True, hide_index=True)
+        else:
+            st.warning("Aucune liaison de référence n'est définie pour ce TP.")
+    else:
+        st.error("Le visualiseur graphique nécessite streamlit-flow-component==1.6.1.")
+
+    st.divider()
+    st.subheader("📊 Résultats de la session actuelle")
+    if st.session_state.historique:
+        historique = pd.DataFrame(st.session_state.historique)
+        st.dataframe(historique, use_container_width=True, hide_index=True)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Tentatives", len(historique))
+        col2.metric("Note moyenne", f'{historique["Note"].mean():.2f} / 20')
+        col3.metric("Montages réussis", int((historique["Résultat"] == "Réussi").sum()))
+        st.download_button(
+            "⬇️ Exporter les résultats CSV",
+            data=historique.to_csv(index=False).encode("utf-8-sig"),
+            file_name="resultats_tp_etudiants.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Aucune tentative enregistrée dans cette session Streamlit.")
 
 elif espace == "ℹ️ À propos":
     st.title("ℹ️ À propos de la plateforme")
